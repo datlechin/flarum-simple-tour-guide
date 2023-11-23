@@ -1,0 +1,63 @@
+{
+    "name": "datlechin/flarum-simple-tour-guide",
+    "description": "A simple tour guide for Flarum",
+    "keywords": [
+        "flarum",
+        "extension",
+        "tour guide",
+        "simple tour guide"
+    ],
+    "type": "flarum-extension",
+    "license": "MIT",
+    "require": {
+        "flarum/core": "^1.2.0"
+    },
+    "authors": [
+        {
+            "name": "Ngo Quoc Dat",
+            "email": "datlechin@gmail.com",
+            "role": "Developer",
+            "homepage": "https://ngoquocdat.dev"
+        }
+    ],
+    "support": {
+        "source": "https://github.com/datlechin/flarum-simple-tour-guide",
+        "forum": "https://discuss.flarum.org/d/33683"
+    },
+    "autoload": {
+        "psr-4": {
+            "Datlechin\\FlarumSimpleTourGuide\\": "src/"
+        }
+    },
+    "extra": {
+        "flarum-extension": {
+            "title": "Simple Tour Guide",
+            "category": "feature",
+            "icon": {
+                "name": "fas fa-map-signs",
+                "color": "#fff",
+                "backgroundColor": "#D3241C"
+            }
+        },
+        "flarum-cli": {
+            "modules": {
+                "admin": true,
+                "forum": true,
+                "js": true,
+                "jsCommon": true,
+                "css": true,
+                "locale": true,
+                "gitConf": true,
+                "githubActions": true,
+                "prettier": true,
+                "typescript": true,
+                "bundlewatch": false,
+                "backendTesting": false,
+                "editorConfig": true,
+                "styleci": true
+            }
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

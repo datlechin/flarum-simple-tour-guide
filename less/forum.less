@@ -1,0 +1,215 @@
+.driver-active .driver-overlay {
+  pointer-events: none;
+}
+
+.driver-active * {
+  pointer-events: none;
+}
+
+.driver-active .driver-active-element,
+.driver-active .driver-active-element *,
+.driver-popover,
+.driver-popover * {
+  pointer-events: auto;
+}
+
+@keyframes animate-fade-in {
+  0% {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.driver-fade .driver-overlay {
+  animation: animate-fade-in 200ms ease-in-out;
+}
+
+.driver-fade .driver-popover {
+  animation: animate-fade-in 200ms;
+}
+
+.driver-popover {
+  all: unset;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 15px;
+  border-radius: var(--border-radius);
+  min-width: 250px;
+  max-width: 350px;
+  box-shadow: 0 7px 15px var(--shadow-color);
+  z-index: 99999;
+  position: fixed;
+  top: 0;
+  inset-inline-end: 0;
+  background-color: var(--body-bg);
+  padding: 20px;
+}
+
+.driver-popover-title {
+  font-size: 20px;
+  font-weight: 500;
+  display: block;
+  position: relative;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.driver-popover-title[style*="block"] + .driver-popover-description {
+  margin-top: 5px;
+}
+
+.driver-popover-description {
+  margin-bottom: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+.driver-popover-footer {
+  margin-top: 15px;
+  text-align: right;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.driver-popover-progress-text {
+  font-size: 13px;
+  font-weight: 400;
+  color: #727272;
+  zoom: 1;
+}
+
+.driver-popover-footer button {
+  --button-color: var(--button-primary-color);
+  --button-bg: var(--button-primary-bg);
+  --button-bg-hover: var(--button-primary-bg-hover);
+  --button-bg-active: var(--button-primary-bg-active);
+  --button-bg-disabled: var(--button-primary-bg-disabled);
+  font-weight: bold;
+  padding-inline-start: 20px;
+  padding-inline-end: 20px;
+  display: inline-block;
+  margin-bottom: 0;
+  text-align: center;
+  vertical-align: middle;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 20px;
+  padding: 6px 13px;
+  border-radius: var(--border-radius);
+  user-select: none;
+  color: var(--button-color);
+  background: var(--button-bg);
+  border: 0;
+
+  &:focus,
+  &:hover {
+    background-color: var(--button-bg-hover);
+  }
+}
+
+.driver-popover-footer .driver-popover-btn-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+:not(body):has(> .driver-active-element) {
+  overflow: hidden !important;
+}
+
+.driver-no-interaction,
+.driver-no-interaction * {
+  pointer-events: none !important;
+}
+
+.driver-popover-navigation-btns {
+  display: flex;
+  flex-grow: 1;
+  justify-content: flex-end;
+}
+
+.driver-popover-navigation-btns button + button {
+  margin-inline-start: 4px;
+}
+
+.driver-popover-arrow {
+  content: "";
+  position: absolute;
+  border: 5px solid #fff;
+}
+
+.driver-popover-arrow-side-over {
+  display: none;
+}
+
+.driver-popover-arrow-side-left {
+  inset-inline-start: 100%;
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  border-top-color: transparent;
+}
+
+.driver-popover-arrow-side-right {
+  inset-inline-end: 100%;
+  border-left-color: transparent;
+  border-bottom-color: transparent;
+  border-top-color: transparent;
+}
+
+.driver-popover-arrow-side-top {
+  top: 100%;
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  border-left-color: transparent;
+}
+
+.driver-popover-arrow-side-bottom {
+  bottom: 100%;
+  border-left-color: transparent;
+  border-top-color: transparent;
+  border-right-color: transparent;
+}
+
+.driver-popover-arrow-side-center {
+  display: none;
+}
+
+.driver-popover-arrow-side-left.driver-popover-arrow-align-start,
+.driver-popover-arrow-side-right.driver-popover-arrow-align-start {
+  top: 15px;
+}
+
+.driver-popover-arrow-side-top.driver-popover-arrow-align-start,
+.driver-popover-arrow-side-bottom.driver-popover-arrow-align-start {
+  inset-inline-start: 15px;
+}
+
+.driver-popover-arrow-align-end.driver-popover-arrow-side-left,
+.driver-popover-arrow-align-end.driver-popover-arrow-side-right {
+  bottom: 15px;
+}
+
+.driver-popover-arrow-side-top.driver-popover-arrow-align-end,
+.driver-popover-arrow-side-bottom.driver-popover-arrow-align-end {
+  inset-inline-end: 15px;
+}
+
+.driver-popover-arrow-side-left.driver-popover-arrow-align-center,
+.driver-popover-arrow-side-right.driver-popover-arrow-align-center {
+  top: 50%;
+  margin-top: -5px;
+}
+
+.driver-popover-arrow-side-top.driver-popover-arrow-align-center,
+.driver-popover-arrow-side-bottom.driver-popover-arrow-align-center {
+  inset-inline-start: 50%;
+  margin-inline-start: -5px;
+}
+
+.driver-popover-arrow-none {
+  display: none;
+}
