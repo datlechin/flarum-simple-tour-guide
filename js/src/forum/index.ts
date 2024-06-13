@@ -2,13 +2,17 @@ import app from 'flarum/forum/app';
 import { DriveStep, driver } from 'driver.js';
 import extractText from 'flarum/common/utils/extractText';
 import TourGuideStep from 'src/common/models/TourGuideStep';
+import addResetTourGuideUserControlButton from './addResetTourGuideUserControlButton';
 export { default as extend } from '../common';
 
 app.initializers.add('datlechin/flarum-simple-tour-guide', () => {
+  addResetTourGuideUserControlButton();
+
   document.addEventListener('DOMContentLoaded', async () => {
     const user = app.session.user;
 
-    if (!user || user.attribute('tourGuideDismissedAt')) {
+    // @ts-ignore
+    if (!user || user.tourGuideDismissedAt()) {
       return;
     }
 
@@ -41,11 +45,16 @@ app.initializers.add('datlechin/flarum-simple-tour-guide', () => {
             title: step.title(),
             description: step.description(),
           },
+          onDeselected: (element) => {
+            if (step.isTriggerClick()) {
+              // @ts-ignore
+              element.click();
+            }
+          },
         };
       });
     };
 
-    extractText;
     const driverObj = driver({
       showProgress: getSetting('showProgress'),
       allowClose: getSetting('allowClose'),

@@ -15,11 +15,8 @@ class UpdateTourGuideStepController extends AbstractShowController
 {
     public $serializer = TourGuideStepSerializer::class;
 
-    protected $bus;
-
-    public function __construct(Dispatcher $bus)
+    public function __construct(protected Dispatcher $bus)
     {
-        $this->bus = $bus;
     }
 
     protected function data(ServerRequestInterface $request, Document $document)

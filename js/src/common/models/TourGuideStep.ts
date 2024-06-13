@@ -12,4 +12,8 @@ export default class TourGuideStep extends Model {
   target() {
     return Model.attribute<string>('target').call(this);
   }
+
+  isTriggerClick() {
+    return Model.attribute<boolean>('isTriggerClick').call(this);
+  }
 }

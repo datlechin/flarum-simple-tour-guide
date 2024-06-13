@@ -10,5 +10,6 @@ class TourGuideStepValidator extends AbstractValidator
         'title' => ['required', 'string'],
         'description' => ['required', 'string'],
         'target' => ['required', 'string', 'regex:/^[.#]?[a-zA-Z]+[\w-]*$/'],
+        'is_trigger_click' => ['required', 'boolean'],
     ];
 }

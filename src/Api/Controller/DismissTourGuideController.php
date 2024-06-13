@@ -15,7 +15,7 @@ class DismissTourGuideController implements RequestHandlerInterface
     {
         $actor = RequestUtil::getActor($request);
 
-        if (!$actor->exists) {
+        if (! $actor->exists) {
             return new EmptyResponse(403);
         }
 

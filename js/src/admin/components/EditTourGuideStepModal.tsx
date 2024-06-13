@@ -6,6 +6,7 @@ import type Mithril from 'mithril';
 import Stream from 'flarum/common/utils/Stream';
 import TourGuideStep from 'src/common/models/TourGuideStep';
 import extractText from 'flarum/common/utils/extractText';
+import Switch from 'flarum/common/components/Switch';
 
 export interface EditTourGuideStepModalAttrs extends IInternalModalAttrs {
   model?: TourGuideStep;
@@ -17,6 +18,7 @@ export default class EditTourGuideStepModal extends Modal<EditTourGuideStepModal
   tourTitle!: Stream<string>;
   description!: Stream<string>;
   target!: Stream<string>;
+  isTriggerClick!: Stream<boolean>;
 
   oninit(vnode: Mithril.Vnode) {
     super.oninit(vnode);
@@ -26,6 +28,7 @@ export default class EditTourGuideStepModal extends Modal<EditTourGuideStepModal
     this.tourTitle = Stream(this.tourGuideStep.title() || '');
     this.description = Stream(this.tourGuideStep.description() || '');
     this.target = Stream(this.tourGuideStep.target() || '');
+    this.isTriggerClick = Stream(this.tourGuideStep.isTriggerClick() || false);
   }
 
   className() {
@@ -93,6 +96,15 @@ export default class EditTourGuideStepModal extends Modal<EditTourGuideStepModal
     );
 
     items.add(
+      'isTriggerClick',
+      <div className="Form-group">
+        <Switch onchange={this.isTriggerClick} state={this.isTriggerClick()} loading={this.loading}>
+          {app.translator.trans('datlechin-simple-tour-guide.admin.trigger_click')}
+        </Switch>
+      </div>
+    );
+
+    items.add(
       'submit',
       <div className="Form-group">
         <Button type="submit" className="Button Button--primary EditTagModal-save" loading={this.loading}>
@@ -115,6 +127,7 @@ export default class EditTourGuideStepModal extends Modal<EditTourGuideStepModal
       title: this.tourTitle(),
       description: this.description(),
       target: this.target(),
+      is_trigger_click: this.isTriggerClick(),
     };
   }
 
