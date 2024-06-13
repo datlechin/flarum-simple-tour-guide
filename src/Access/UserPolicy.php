@@ -9,7 +9,7 @@ class UserPolicy extends AbstractPolicy
 {
     public function resetTourGuide(User $actor, User $user)
     {
-        if ($user->hasPermission('resetTourGuide')) {
+        if ($user->hasPermission('resetTourGuide') || $actor->is($user)) {
             return $this->allow();
         }
 
