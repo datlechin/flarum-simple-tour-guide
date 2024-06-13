@@ -11,17 +11,14 @@ use Psr\Http\Message\ServerRequestInterface;
 
 class DeleteTourGuideStepController extends AbstractDeleteController
 {
-    protected $bus;
-
-    public function __construct(Dispatcher $bus)
+    public function __construct(protected Dispatcher $bus)
     {
-        $this->bus = $bus;
     }
 
     protected function delete(ServerRequestInterface $request)
     {
         $this->bus->dispatch(
-            new DeleteTourGuideStep(Arr::get($request->getQueryParams(), 'id'), RequestUtil::getActor($request))
+            new DeleteTourGuideStep(Arr::get($request->getQueryParams(), 'id'), RequestUtil::getActor($request)),
         );
     }
 }

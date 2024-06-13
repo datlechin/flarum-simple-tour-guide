@@ -41,7 +41,7 @@ export default class SettingsPage extends ExtensionPage {
             })}
             <div className="Form-group">
               <Button className="Button" icon="fas fa-plus" onclick={() => app.modal.show(EditTourGuideStepModal)}>
-                Create new tour
+                {app.translator.trans('datlechin-simple-tour-guide.admin.add_step')}
               </Button>
             </div>
             {this.loading ? (
@@ -54,6 +54,7 @@ export default class SettingsPage extends ExtensionPage {
                       <tr>
                         <th>{app.translator.trans('datlechin-simple-tour-guide.admin.title')}</th>
                         <th>{app.translator.trans('datlechin-simple-tour-guide.admin.target')}</th>
+                        <th>{app.translator.trans('datlechin-simple-tour-guide.admin.trigger_click')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -67,6 +68,11 @@ export default class SettingsPage extends ExtensionPage {
                               icon="fas fa-edit"
                               onclick={() => app.modal.show(EditTourGuideStepModal, { model: step })}
                             />
+                          </td>
+                          <td>
+                            {step.isTriggerClick()
+                              ? app.translator.trans('datlechin-simple-tour-guide.admin.yes')
+                              : app.translator.trans('datlechin-simple-tour-guide.admin.no')}
                           </td>
                         </tr>
                       ))}

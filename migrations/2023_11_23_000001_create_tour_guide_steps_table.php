@@ -12,5 +12,5 @@ return Migration::createTable(
         $table->string('description');
         $table->string('target');
         $table->timestamps();
-    }
+    },
 );

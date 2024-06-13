@@ -8,12 +8,15 @@ use Illuminate\Support\Arr;
 
 class EditTourGuideStepHandler
 {
-    public function __construct(protected TourGuideStepValidator $validator) {}
+    public function __construct(protected TourGuideStepValidator $validator)
+    {
+    }
 
-    public function handle(EditTourGuideStep $command)
+    public function handle(EditTourGuideStep $command): TourGuideStep
     {
         $data = $command->data;
 
+        /** @var \Datlechin\FlarumSimpleTourGuide\TourGuideStep $tourGuideStep */
         $tourGuideStep = TourGuideStep::query()->findOrFail($command->id);
 
         $attributes = Arr::get($data, 'attributes', []);

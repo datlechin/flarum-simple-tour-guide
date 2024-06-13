@@ -10,24 +10,23 @@ class TourGuideStepSerializer extends AbstractSerializer
 {
     protected $type = 'tour-guide-steps';
 
-    protected function getDefaultAttributes($tourGuideStep)
+    protected function getDefaultAttributes($model)
     {
-        if (!($tourGuideStep instanceof TourGuideStep)) {
+        if (! ($model instanceof TourGuideStep)) {
             throw new InvalidArgumentException(
                 sprintf(
                     '%s can only serialize instances of %s',
                     $this::class,
-                    TourGuideStep::class
-                )
+                    TourGuideStep::class,
+                ),
             );
         }
 
-        $attributes = [
-            'title' => $tourGuideStep->title,
-            'description' => $tourGuideStep->description,
-            'target' => $tourGuideStep->target,
+        return [
+            'title' => $model->title,
+            'description' => $model->description,
+            'target' => $model->target,
+            'isTriggerClick' => $model->is_trigger_click,
         ];
-
-        return $attributes;
     }
 }

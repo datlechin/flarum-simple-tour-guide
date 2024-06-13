@@ -9,17 +9,13 @@ use Illuminate\Support\Arr;
 
 class CreateTourGuideStepHandler
 {
-    protected $validator;
-
-    protected $events;
-
-    public function __construct(TourGuideStepValidator $validator, Dispatcher $events)
-    {
-        $this->validator = $validator;
-        $this->events = $events;
+    public function __construct(
+        protected TourGuideStepValidator $validator,
+        protected Dispatcher $events,
+    ) {
     }
 
-    public function handle(CreateTourGuideStep $command)
+    public function handle(CreateTourGuideStep $command): TourGuideStep
     {
         $data = $command->data;
 
@@ -27,6 +23,7 @@ class CreateTourGuideStepHandler
             'title' => Arr::get($data, 'attributes.title'),
             'description' => Arr::get($data, 'attributes.description'),
             'target' => Arr::get($data, 'attributes.target'),
+            'is_trigger_click' => Arr::get($data, 'attributes.is_trigger_click'),
         ]);
 
         $this->validator->assertValid($tourGuideStep->getAttributes());

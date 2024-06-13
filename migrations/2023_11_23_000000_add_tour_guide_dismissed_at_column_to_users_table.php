@@ -14,5 +14,5 @@ return [
         $schema->table('users', function (Blueprint $table) {
             $table->dropColumn('tour_guide_dismissed_at');
         });
-    }
+    },
 ];

@@ -15,17 +15,14 @@ class CreateTourGuideStepController extends AbstractCreateController
 {
     public $serializer = TourGuideStepSerializer::class;
 
-    protected $bus;
-
-    public function __construct(Dispatcher $bus)
+    public function __construct(protected Dispatcher $bus)
     {
-        $this->bus = $bus;
     }
 
     protected function data(ServerRequestInterface $request, Document $document)
     {
         return $this->bus->dispatch(
-            new CreateTourGuideStep(RequestUtil::getActor($request), Arr::get($request->getParsedBody(), 'data', []))
+            new CreateTourGuideStep(RequestUtil::getActor($request), Arr::get($request->getParsedBody(), 'data', [])),
         );
     }
 }

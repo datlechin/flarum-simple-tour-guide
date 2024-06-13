@@ -17,6 +17,7 @@ use Datlechin\FlarumSimpleTourGuide\Api\Controller\DismissTourGuideController;
 use Datlechin\FlarumSimpleTourGuide\Api\Controller\ListTourGuideStepController;
 use Datlechin\FlarumSimpleTourGuide\Api\Controller\UpdateTourGuideStepController;
 use Flarum\Api\Serializer\UserSerializer;
+use Flarum\User\Event\Saving;
 use Flarum\User\User;
 use Flarum\Extend;
 
@@ -34,7 +35,11 @@ return [
     (new Extend\ApiSerializer(UserSerializer::class))
         ->attribute(
             'tourGuideDismissedAt',
-            fn(UserSerializer $serializer, User $model, array $attributes) => $model->tour_guide_dismissed_at
+            fn (UserSerializer $serializer, User $user, array $attributes) => $user->tour_guide_dismissed_at,
+        )
+        ->attribute(
+            'canResetTourGuide',
+            fn (UserSerializer $serializer, User $user) => $serializer->getActor()->can('resetTourGuide', $user),
         ),
 
     (new Extend\Routes('api'))
@@ -47,5 +52,11 @@ return [
     (new Extend\Settings())
         ->serializeToForum('datlechin-simple-tour-guide.showProgress', 'datlechin-simple-tour-guide.show_progress', 'boolval')
         ->serializeToForum('datlechin-simple-tour-guide.allowDismiss', 'datlechin-simple-tour-guide.allow_dismiss', 'boolval')
-        ->serializeToForum('datlechin-simple-tour-guide.steps', 'datlechin-simple-tour-guide.steps')
+        ->serializeToForum('datlechin-simple-tour-guide.steps', 'datlechin-simple-tour-guide.steps'),
+
+    (new Extend\Event())
+        ->listen(Saving::class, Listener\SaveTourGuideDismissedAtToDatabase::class),
+
+    (new Extend\Policy())
+        ->modelPolicy(User::class, Access\UserPolicy::class),
 ];

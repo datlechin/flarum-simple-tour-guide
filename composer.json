@@ -12,6 +12,9 @@
     "require": {
         "flarum/core": "^1.2.0"
     },
+    "require-dev": {
+        "laravel/pint": "^1.16"
+    },
     "authors": [
         {
             "name": "Ngo Quoc Dat",
