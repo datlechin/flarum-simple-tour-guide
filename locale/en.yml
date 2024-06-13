@@ -23,6 +23,8 @@ datlechin-simple-tour-guide:
     target: Target
     target_placeholder: "The target element of the step (e.g. #element-id)."
     trigger_click: Trigger click
+    yes: Yes
+    no: No
 
   forum:
       progress_text: "{current} of {total}"
