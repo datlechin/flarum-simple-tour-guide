@@ -69,10 +69,11 @@ export default class SettingsPage extends ExtensionPage {
                               onclick={() => app.modal.show(EditTourGuideStepModal, { model: step })}
                             />
                           </td>
-                          <td>{step.isTriggerClick()
-                            ? app.translator.trans('datlechin-simple-tour-guide.admin.yes')
-                            : app.translator.trans('datlechin-simple-tour-guide.admin.no')
-                          }</td>
+                          <td>
+                            {step.isTriggerClick()
+                              ? app.translator.trans('datlechin-simple-tour-guide.admin.yes')
+                              : app.translator.trans('datlechin-simple-tour-guide.admin.no')}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
