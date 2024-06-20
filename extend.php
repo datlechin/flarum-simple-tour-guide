@@ -52,6 +52,7 @@ return [
     (new Extend\Settings())
         ->serializeToForum('datlechin-simple-tour-guide.showProgress', 'datlechin-simple-tour-guide.show_progress', 'boolval')
         ->serializeToForum('datlechin-simple-tour-guide.allowDismiss', 'datlechin-simple-tour-guide.allow_dismiss', 'boolval')
+        ->serializeToForum('datlechin-simple-tour-guide.skipNullElements', 'datlechin-simple-tour-guide.skip_null_elements', 'boolval')
         ->serializeToForum('datlechin-simple-tour-guide.steps', 'datlechin-simple-tour-guide.steps'),
 
     (new Extend\Event())

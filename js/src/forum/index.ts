@@ -64,13 +64,18 @@ app.initializers.add('datlechin/flarum-simple-tour-guide', () => {
         current: '{{current}}',
         total: '{{total}}',
       }),
-      showButtons: ['next', 'previous'],
+      showButtons: getSetting('skipNullElements') ? ['next'] : ['next', 'previous'],
       nextBtnText: getTranslation('next_btn_text'),
       prevBtnText: getTranslation('prev_btn_text'),
       doneBtnText: getTranslation('done_btn_text'),
       steps: getSteps(),
       onDestroyed: () => {
         dismissTour();
+      },
+      onHighlightStarted(element) {
+        if (! element && getSetting('skipNullElements')) {
+          setTimeout(() => driverObj.moveNext(), 10)
+        }
       },
     });
 
