@@ -39,6 +39,12 @@ export default class SettingsPage extends ExtensionPage {
               label: app.translator.trans('datlechin-simple-tour-guide.admin.settings.allow_close_label'),
               help: app.translator.trans('datlechin-simple-tour-guide.admin.settings.allow_close_help'),
             })}
+            {this.buildSettingComponent({
+              setting: 'datlechin-simple-tour-guide.skip_null_elements',
+              type: 'boolean',
+              label: app.translator.trans('datlechin-simple-tour-guide.admin.settings.skip_null_elements_label'),
+              help: app.translator.trans('datlechin-simple-tour-guide.admin.settings.skip_null_elements_help'),
+            })}
             <div className="Form-group">
               <Button className="Button" icon="fas fa-plus" onclick={() => app.modal.show(EditTourGuideStepModal)}>
                 {app.translator.trans('datlechin-simple-tour-guide.admin.add_step')}
