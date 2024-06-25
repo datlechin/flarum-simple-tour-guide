@@ -73,8 +73,8 @@ app.initializers.add('datlechin/flarum-simple-tour-guide', () => {
         dismissTour();
       },
       onHighlightStarted(element) {
-        if (! element && getSetting('skipNullElements')) {
-          setTimeout(() => driverObj.moveNext(), 10)
+        if (!element && getSetting('skipNullElements')) {
+          setTimeout(() => driverObj.moveNext(), 10);
         }
       },
     });
