@@ -12,7 +12,7 @@ export default function () {
     const actor = app.session.user;
 
     // @ts-ignore
-    if (!actor.canResetTourGuide() || !user.attribute('tourGuideDismissedAt')) {
+    if (!actor || !actor.canResetTourGuide() || !user.attribute('tourGuideDismissedAt')) {
       return;
     }
 
