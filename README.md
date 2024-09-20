@@ -28,7 +28,7 @@ composer require datlechin/flarum-simple-tour-guide:"*"
 ## Updating
 
 ```sh
-composer update datlechin/flarum-simple-tour-guide:"*"
+composer require datlechin/flarum-simple-tour-guide:"*"
 php flarum migrate
 php flarum cache:clear
 ```
