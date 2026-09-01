@@ -1,34 +1,299 @@
-.TourGuideSteps-Table {
-  width: 100% !important;
-  margin-bottom: 1rem;
-  border-spacing: 0;
+// ---------------------------------
+// LISTS
+//
+// Tours and steps are both reorderable lists of rows: a drag handle, a button
+// that is the row, and its controls. They share their bones and differ only in
+// what each row says.
 
-  @media (min-width: 768px) {
-    width: 50% !important;
+.TourList,
+.TourStepList {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  max-width: 640px;
+}
+
+.TourListItem,
+.TourStepListItem {
+  display: flex;
+  // Rows are no longer one line tall now that the meta wraps, so the handle
+  // and the menu sit against the top rather than floating in the middle.
+  align-items: flex-start;
+  gap: 4px;
+  border-radius: var(--border-radius);
+
+  &:hover {
+    background: var(--control-bg);
+  }
+}
+
+.TourListItem-handle,
+.TourStepListItem-handle {
+  padding: 10px 4px 0 8px;
+  cursor: grab;
+  color: var(--muted-more-color);
+
+  .sortable-dragging & {
+    cursor: grabbing;
+  }
+}
+
+// The row itself is the button, the way a tag row is on the tags page: the
+// whole thing is the target, not a link buried inside it.
+.TourListItem-main,
+.TourStepListItem-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  flex: 1;
+  // Without this the flex item refuses to shrink, and a long name pushes the
+  // controls off the end instead of being truncated.
+  min-width: 0;
+  padding: 8px 4px;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.TourListItem-title,
+.TourStepListItem-title {
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+// Wraps rather than truncates. Core caps a section at 400px and these say
+// where a tour runs and what a step points at, which is the part you came to
+// read; an ellipsis in the middle of a selector helps nobody.
+.TourListItem-meta,
+.TourStepListItem-target {
+  font-size: 12px;
+  color: var(--muted-color);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.TourStepListItem-target code {
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+}
+
+// Selected reads the way the admin navigation reads, because it is the same
+// idea: this is the thing the rest of the page is about.
+.TourListItem--selected {
+  &,
+  &:hover {
+    background: var(--control-color);
   }
 
-  thead {
-    tr {
-      th {
-        background: var(--control-bg);
-        padding: 8px 16px;
-        font-weight: bold;
-        border-bottom: 1px solid var(--muted-more-color);
-      }
-    }
+  .TourListItem-title {
+    color: var(--body-bg);
   }
 
-  tbody {
-    tr {
-      td {
-        border: none;
-        padding: 8px 16px;
-        border: 1px solid var(--control-bg);
-
-        button {
-          margin-inline-start: 1rem;
-        }
-      }
-    }
+  .TourListItem-meta {
+    color: var(--body-bg);
+    opacity: 0.8;
   }
+
+  .TourListItem-handle,
+  .Button {
+    color: var(--body-bg);
+  }
+}
+
+// Switched off is said in words in the row's own meta line, so it only needs
+// to be quieter here, not faded out.
+.TourListItem--off,
+.TourStepListItem--off {
+  .TourListItem-title,
+  .TourStepListItem-title {
+    font-weight: normal;
+    color: var(--muted-color);
+  }
+}
+
+.TourListItem-warning {
+  color: var(--control-warning-color);
+
+  .icon {
+    margin-inline-end: 4px;
+  }
+}
+
+.TourListItem-controls,
+.TourStepListItem-controls {
+  padding-inline-end: 4px;
+}
+
+.TourStepListItem-flags {
+  padding-top: 10px;
+}
+
+.TourStepListItem-flags {
+  display: flex;
+  gap: 8px;
+  color: var(--muted-color);
+}
+
+.TourList-empty,
+.TourStepList-empty {
+  margin: 0 0 12px;
+  color: var(--muted-color);
+}
+
+.TourList-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.TourStepList-body {
+  max-width: 640px;
+}
+
+.sortable-placeholder {
+  border: 2px dashed var(--control-bg);
+  border-radius: var(--border-radius);
+
+  * {
+    visibility: hidden;
+  }
+}
+
+// ---------------------------------
+// STATISTICS
+
+.TourStats-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  margin-bottom: 20px;
+}
+
+.TourStats-figure {
+  display: flex;
+  flex-direction: column;
+}
+
+.TourStats-figure-value {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--heading-color);
+}
+
+.TourStats-figure-label {
+  font-size: 12px;
+  color: var(--muted-color);
+}
+
+.TourStats-empty {
+  margin: 0;
+  color: var(--muted-color);
+}
+
+.TourStats-steps {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-width: 640px;
+}
+
+.TourStats-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.TourStats-step-title {
+  flex: 0 0 40%;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.TourStats-step-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--control-bg);
+  overflow: hidden;
+}
+
+.TourStats-step-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--control-danger-color);
+}
+
+.TourStats-step-count {
+  min-width: 2ch;
+  text-align: end;
+  color: var(--muted-color);
+}
+
+// ---------------------------------
+// MODALS
+
+.EditTourStepModal-target {
+  display: flex;
+  gap: 8px;
+
+  .FormControl {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.EditTourStepModal-invalidTarget {
+  color: var(--error-color);
+}
+
+.EditTourStepModal-translation {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.EditTourModal-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-bottom: 12px;
+
+  .checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    font-weight: normal;
+  }
+}
+
+.EditTourModal-age {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: normal;
+
+  .FormControl {
+    width: 100px;
+  }
+}
+
+.EditTourModal-delete,
+.EditTourStepModal-delete {
+  margin-inline-start: auto;
 }

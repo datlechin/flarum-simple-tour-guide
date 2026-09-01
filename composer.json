@@ -1,19 +1,23 @@
 {
     "name": "datlechin/flarum-simple-tour-guide",
-    "description": "A simple tour guide for Flarum",
+    "description": "Guided tours that walk new members through your forum.",
     "keywords": [
         "flarum",
         "extension",
         "tour guide",
-        "simple tour guide"
+        "onboarding"
     ],
     "type": "flarum-extension",
     "license": "MIT",
     "require": {
-        "flarum/core": "^1.2.0"
+        "php": "^8.3",
+        "flarum/core": "^2.0"
     },
     "require-dev": {
-        "laravel/pint": "^1.16"
+        "flarum/phpstan": "^2.0",
+        "flarum/testing": "^2.0",
+        "laravel/pint": "^1.16",
+        "flarum/markdown": "^2.0"
     },
     "authors": [
         {
@@ -21,6 +25,12 @@
             "email": "datlechin@gmail.com",
             "role": "Developer",
             "homepage": "https://ngoquocdat.dev"
+        }
+    ],
+    "funding": [
+        {
+            "type": "github",
+            "url": "https://github.com/sponsors/datlechin"
         }
     ],
     "support": {
@@ -34,10 +44,10 @@
     },
     "extra": {
         "flarum-extension": {
-            "title": "Simple Tour Guide",
+            "title": "Tour Guide",
             "category": "feature",
             "icon": {
-                "name": "fas fa-map-signs",
+                "name": "fas fa-signs-post",
                 "color": "#fff",
                 "backgroundColor": "#D3241C"
             }
@@ -55,12 +65,33 @@
                 "prettier": true,
                 "typescript": true,
                 "bundlewatch": false,
-                "backendTesting": false,
+                "backendTesting": true,
+                "phpstan": true,
                 "editorConfig": true,
                 "styleci": true
             }
         }
     },
+    "scripts": {
+        "test": [
+            "@test:integration"
+        ],
+        "test:integration": "phpunit -c tests/phpunit.integration.xml",
+        "test:setup": "@php tests/integration/setup.php",
+        "analyse:phpstan": "phpstan analyse",
+        "clear-cache:phpstan": "phpstan clear-result-cache"
+    },
+    "scripts-descriptions": {
+        "test": "Runs all tests.",
+        "test:integration": "Runs all integration tests.",
+        "test:setup": "Sets up a database for use with integration tests. Execute this only once.",
+        "analyse:phpstan": "Run static analysis"
+    },
     "minimum-stability": "dev",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "autoload-dev": {
+        "psr-4": {
+            "Datlechin\\FlarumSimpleTourGuide\\Tests\\": "tests/"
+        }
+    }
 }

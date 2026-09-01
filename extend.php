@@ -11,53 +11,70 @@
 
 namespace Datlechin\FlarumSimpleTourGuide;
 
-use Datlechin\FlarumSimpleTourGuide\Api\Controller\CreateTourGuideStepController;
-use Datlechin\FlarumSimpleTourGuide\Api\Controller\DeleteTourGuideStepController;
-use Datlechin\FlarumSimpleTourGuide\Api\Controller\DismissTourGuideController;
-use Datlechin\FlarumSimpleTourGuide\Api\Controller\ListTourGuideStepController;
-use Datlechin\FlarumSimpleTourGuide\Api\Controller\UpdateTourGuideStepController;
-use Flarum\Api\Serializer\UserSerializer;
-use Flarum\User\Event\Saving;
-use Flarum\User\User;
+use Datlechin\FlarumSimpleTourGuide\Access\UserPolicy;
+use Datlechin\FlarumSimpleTourGuide\Api\Controller\DuplicateTourController;
+use Datlechin\FlarumSimpleTourGuide\Api\Controller\DuplicateTourStepController;
+use Datlechin\FlarumSimpleTourGuide\Api\Controller\ExportTourController;
+use Datlechin\FlarumSimpleTourGuide\Api\Controller\ImportTourController;
+use Datlechin\FlarumSimpleTourGuide\Api\Controller\OrderToursController;
+use Datlechin\FlarumSimpleTourGuide\Api\Controller\OrderTourStepsController;
+use Datlechin\FlarumSimpleTourGuide\Api\Controller\RecordTourCompletionController;
+use Datlechin\FlarumSimpleTourGuide\Api\Controller\ResetTourCompletionsController;
+use Datlechin\FlarumSimpleTourGuide\Api\Controller\ShowAvailableToursController;
+use Datlechin\FlarumSimpleTourGuide\Api\Controller\ShowTourStatsController;
+use Datlechin\FlarumSimpleTourGuide\Api\Resource\TourResource;
+use Datlechin\FlarumSimpleTourGuide\Api\Resource\TourStepResource;
+use Datlechin\FlarumSimpleTourGuide\Api\UserResourceFields;
+use Flarum\Api\Resource\UserResource;
 use Flarum\Extend;
+use Flarum\User\User;
 
 return [
     (new Extend\Frontend('forum'))
-        ->js(__DIR__ . '/js/dist/forum.js')
-        ->css(__DIR__ . '/less/forum.less'),
+        ->js(__DIR__.'/js/dist/forum.js')
+        ->css(__DIR__.'/less/forum.less'),
 
     (new Extend\Frontend('admin'))
-        ->js(__DIR__ . '/js/dist/admin.js')
-        ->css(__DIR__ . '/less/admin.less'),
+        ->js(__DIR__.'/js/dist/admin.js')
+        ->css(__DIR__.'/less/admin.less'),
 
-    new Extend\Locales(__DIR__ . '/locale'),
+    new Extend\Locales(__DIR__.'/locale'),
 
-    (new Extend\ApiSerializer(UserSerializer::class))
-        ->attribute(
-            'tourGuideDismissedAt',
-            fn (UserSerializer $serializer, User $user, array $attributes) => $user->tour_guide_dismissed_at,
-        )
-        ->attribute(
-            'canResetTourGuide',
-            fn (UserSerializer $serializer, User $user) => $serializer->getActor()->can('resetTourGuide', $user),
-        ),
+    new Extend\ApiResource(TourResource::class),
+    new Extend\ApiResource(TourStepResource::class),
+
+    (new Extend\ApiResource(UserResource::class))
+        ->fields(UserResourceFields::class),
 
     (new Extend\Routes('api'))
-        ->get('/tour-guide-steps', 'tour-guide-steps.index', ListTourGuideStepController::class)
-        ->post('/tour-guide-steps', 'tour-guide-steps.create', CreateTourGuideStepController::class)
-        ->delete('/tour-guide-steps/{id}', 'tour-guide-steps.delete', DeleteTourGuideStepController::class)
-        ->patch('/tour-guide-steps/{id}', 'tour-guide-steps.update', UpdateTourGuideStepController::class)
-        ->post('/simple-tour-guide/dismiss', 'simple-tour-guide.dismiss', DismissTourGuideController::class),
+        // What the forum runs: only this member's tours, only in their
+        // language. Deliberately not the admin resource, which would have to
+        // hand out audience rules and every translation to answer the same
+        // question.
+        ->get('/tour-guide/available', 'tour-guide.available', ShowAvailableToursController::class)
+        ->post('/tour-guide/completions', 'tour-guide.completions.record', RecordTourCompletionController::class)
+        ->post('/tour-guide/completions/reset', 'tour-guide.completions.reset', ResetTourCompletionsController::class)
 
-    (new Extend\Settings())
-        ->serializeToForum('datlechin-simple-tour-guide.showProgress', 'datlechin-simple-tour-guide.show_progress', 'boolval')
-        ->serializeToForum('datlechin-simple-tour-guide.allowDismiss', 'datlechin-simple-tour-guide.allow_dismiss', 'boolval')
-        ->serializeToForum('datlechin-simple-tour-guide.skipNullElements', 'datlechin-simple-tour-guide.skip_null_elements', 'boolval')
-        ->serializeToForum('datlechin-simple-tour-guide.steps', 'datlechin-simple-tour-guide.steps'),
+        // Ordering is one decision about a whole list, not an edit to each row
+        // in it, so it is one request rather than one per moved row.
+        ->post('/tour-guide-tours/order', 'tour-guide-tours.order', OrderToursController::class)
+        ->post('/tour-guide-tours/{id}/steps/order', 'tour-guide-tours.steps.order', OrderTourStepsController::class)
 
-    (new Extend\Event())
-        ->listen(Saving::class, Listener\SaveTourGuideDismissedAtToDatabase::class),
+        ->post('/tour-guide-tours/{id}/duplicate', 'tour-guide-tours.duplicate', DuplicateTourController::class)
+        ->post('/tour-guide-steps/{id}/duplicate', 'tour-guide-steps.duplicate', DuplicateTourStepController::class)
+
+        ->get('/tour-guide-tours/{id}/stats', 'tour-guide-tours.stats', ShowTourStatsController::class)
+        ->get('/tour-guide-tours/{id}/export', 'tour-guide-tours.export', ExportTourController::class)
+        ->post('/tour-guide-tours/import', 'tour-guide-tours.import', ImportTourController::class),
 
     (new Extend\Policy())
-        ->modelPolicy(User::class, Access\UserPolicy::class),
+        ->modelPolicy(User::class, UserPolicy::class),
+
+    (new Extend\Settings())
+        ->default('datlechin-simple-tour-guide.show_progress', true)
+        ->default('datlechin-simple-tour-guide.allow_close', true)
+        ->default('datlechin-simple-tour-guide.show_in_settings', true)
+        ->serializeToForum('datlechin-simple-tour-guide.showProgress', 'datlechin-simple-tour-guide.show_progress', 'boolval')
+        ->serializeToForum('datlechin-simple-tour-guide.allowClose', 'datlechin-simple-tour-guide.allow_close', 'boolval')
+        ->serializeToForum('datlechin-simple-tour-guide.showInSettings', 'datlechin-simple-tour-guide.show_in_settings', 'boolval'),
 ];
