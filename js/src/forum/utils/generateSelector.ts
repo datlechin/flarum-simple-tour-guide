@@ -16,7 +16,9 @@ const MAX_DEPTH = 4;
  * A CSS selector for one element on the page, aimed at surviving the next
  * render rather than at being the shortest thing that matches today.
  */
-export default function generateSelector(element: Element): string | null {
+export default function generateSelector(target: Element): string | null {
+  const element = meaningful(target);
+
   if (!element.isConnected || element === document.body || element === document.documentElement) {
     return null;
   }
@@ -76,17 +78,47 @@ function usableId(element: Element): string | null {
   return id && !GENERATED_ID.test(id) && matchCount(`#${CSS.escape(id)}`) === 1 ? id : null;
 }
 
+/**
+ * The element somebody pointing at this one probably means.
+ *
+ * Pointing at a button lands on the span holding its text, and a step that
+ * highlights the label rather than the button is not what anybody drew a box
+ * around. Climbs to the control when the thing under the cursor is one of its
+ * decorative parts, and no further.
+ */
+function meaningful(element: Element): Element {
+  if (!/^(span|i|svg|path|b|strong|em|small|label)$/i.test(element.tagName)) {
+    return element;
+  }
+
+  const control = element.closest('button, a, [role="button"], input, select, textarea');
+
+  if (!control) return element;
+
+  // Only if it is genuinely close by. A span deep inside a page-sized link
+  // should stay where it is.
+  let depth = 0;
+
+  for (let node: Element | null = element; node && node !== control; node = node.parentElement) {
+    if (++depth > 3) return element;
+  }
+
+  return control;
+}
+
 function describe(element: Element): string {
   const tag = element.tagName.toLowerCase();
 
   const classes = Array.from(element.classList)
     .filter((name) => !STATE_CLASSES.test(name))
-    // Flarum's own component classes are capitalised and stable; utility and
-    // state classes tend not to be. Prefer the former, keep at most two so the
-    // selector stays readable.
-    .sort((a, b) => Number(/^[A-Z]/.test(b)) - Number(/^[A-Z]/.test(a)))
+    // The rarest class is the one that says which element this is. `Button` is
+    // on every button in Flarum; `IndexPage-newDiscussion` is on one. Sorting
+    // by how many things wear it puts the telling one first, and two of them
+    // is enough to stay readable.
+    .map((name) => ({ name, count: matchCount(`.${CSS.escape(name)}`) }))
+    .sort((a, b) => a.count - b.count)
     .slice(0, 2)
-    .map((name) => `.${CSS.escape(name)}`)
+    .map(({ name }) => `.${CSS.escape(name)}`)
     .join('');
 
   return classes || tag;

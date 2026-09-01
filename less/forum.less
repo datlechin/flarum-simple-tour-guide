@@ -206,10 +206,14 @@
   color: var(--muted-color);
 }
 
+// Says what to do, and must not read as another button: the whole point of
+// this step is that the reader presses the real thing instead.
 .TourGuide-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 13px;
-  font-weight: 600;
-  color: var(--primary-color);
+  color: var(--muted-color);
 }
 
 .TourGuide-controls {

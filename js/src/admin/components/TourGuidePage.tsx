@@ -62,12 +62,19 @@ export default class TourGuidePage<CustomAttrs extends ExtensionPageAttrs = Exte
     return (
       <div className="ExtensionPage-settings TourGuidePage">
         <div className="container">
+          {/* Two groups rather than one: core caps a section at 400px and
+              shrinks it to share a row, so four abreast leaves none of them
+              readable. Managing a tour on top, watching it underneath. */}
           <FormSectionGroup>
             <FormSection label={app.translator.trans('datlechin-simple-tour-guide.admin.tours.heading')}>
               {this.loadingTours ? <LoadingIndicator /> : this.tourList()}
             </FormSection>
 
-            {this.detail()}
+            {this.steps()}
+          </FormSectionGroup>
+
+          <FormSectionGroup>
+            {this.stats()}
 
             <FormSection label={app.translator.trans('datlechin-simple-tour-guide.admin.settings.heading')}>
               <Form>
@@ -187,20 +194,28 @@ export default class TourGuidePage<CustomAttrs extends ExtensionPageAttrs = Exte
     return parts.map((part, index) => (index ? [' · ', part] : part));
   }
 
-  protected detail(): Mithril.Children {
+  protected steps(): Mithril.Children {
     const tour = this.selected();
 
     if (!tour) return null;
 
-    return [
+    return (
       <FormSection label={app.translator.trans('datlechin-simple-tour-guide.admin.steps.heading', { title: tour.title() })}>
         <TourStepList tour={tour} />
-      </FormSection>,
+      </FormSection>
+    );
+  }
 
+  protected stats(): Mithril.Children {
+    const tour = this.selected();
+
+    if (!tour) return null;
+
+    return (
       <FormSection label={app.translator.trans('datlechin-simple-tour-guide.admin.stats.heading')}>
         <TourStats tour={tour} />
-      </FormSection>,
-    ];
+      </FormSection>
+    );
   }
 
   protected tours(): Tour[] {

@@ -16,7 +16,9 @@
 .TourListItem,
 .TourStepListItem {
   display: flex;
-  align-items: center;
+  // Rows are no longer one line tall now that the meta wraps, so the handle
+  // and the menu sit against the top rather than floating in the middle.
+  align-items: flex-start;
   gap: 4px;
   border-radius: var(--border-radius);
 
@@ -27,7 +29,7 @@
 
 .TourListItem-handle,
 .TourStepListItem-handle {
-  padding: 0 4px 0 8px;
+  padding: 10px 4px 0 8px;
   cursor: grab;
   color: var(--muted-more-color);
 
@@ -65,14 +67,15 @@
   text-overflow: ellipsis;
 }
 
+// Wraps rather than truncates. Core caps a section at 400px and these say
+// where a tour runs and what a step points at, which is the part you came to
+// read; an ellipsis in the middle of a selector helps nobody.
 .TourListItem-meta,
 .TourStepListItem-target {
   font-size: 12px;
   color: var(--muted-color);
   max-width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .TourStepListItem-target code {
@@ -130,9 +133,12 @@
 }
 
 .TourStepListItem-flags {
+  padding-top: 10px;
+}
+
+.TourStepListItem-flags {
   display: flex;
   gap: 8px;
-  padding: 0 4px;
   color: var(--muted-color);
 }
 

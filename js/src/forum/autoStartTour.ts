@@ -52,7 +52,13 @@ export default function autoStartTour(): void {
 async function consider(route: string | undefined | null): Promise<void> {
   if (!app.session.user || tourIsRunning()) return;
 
-  const preview = new URLSearchParams(window.location.search).get(PREVIEW_PARAM);
+  const params = new URLSearchParams(window.location.search);
+
+  // The picker puts an overlay of its own over the forum, and a tour on top of
+  // that covers the very elements the admin came here to point at.
+  if (params.has('tour-picker')) return;
+
+  const preview = params.get(PREVIEW_PARAM);
 
   // One frame for Mithril to draw the page, one for the page to settle.
   await nextFrames(2);

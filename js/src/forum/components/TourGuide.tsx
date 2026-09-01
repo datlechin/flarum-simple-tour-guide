@@ -2,6 +2,7 @@ import app from 'flarum/forum/app';
 import Component from 'flarum/common/Component';
 import type { ComponentAttrs } from 'flarum/common/Component';
 import Button from 'flarum/common/components/Button';
+import Icon from 'flarum/common/components/Icon';
 import ItemList from 'flarum/common/utils/ItemList';
 import extractText from 'flarum/common/utils/extractText';
 import generateElementId from 'flarum/common/utils/generateElementId';
@@ -169,7 +170,10 @@ export default class TourGuide<CustomAttrs extends TourGuideAttrs = TourGuideAtt
     if (state.awaitingClick) {
       items.add(
         'awaitingClick',
-        <span className="TourGuide-hint">{app.translator.trans('datlechin-simple-tour-guide.forum.click_to_continue')}</span>,
+        <span className="TourGuide-hint">
+          <Icon name="fas fa-hand-pointer" />
+          {app.translator.trans('datlechin-simple-tour-guide.forum.click_to_continue')}
+        </span>,
         0
       );
 

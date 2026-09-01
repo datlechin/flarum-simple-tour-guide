@@ -87,7 +87,14 @@ export default class TourState {
     // menu and then point inside it. That changes which of the remaining steps
     // have something to point at, so they are worked out again afterwards.
     if (step?.clicksTarget && this.element) {
+      // The click on Next that got us here is still on its way up to the
+      // document, and Flarum's dropdowns close on any document click. Firing
+      // ours inside it means opening a menu that the outer click then shuts
+      // again, so wait for it to finish first.
+      await nextFrames(1);
+
       this.element.click();
+
       await nextFrames(2);
       this.recomputeApplicable();
     }

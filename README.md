@@ -5,6 +5,8 @@
 Guided tours that walk new members through your forum. Each step points at
 something on the page and says what it is.
 
+![A step anchored to an element](screenshots/02-anchored.png)
+
 ## Features
 
 - **Several tours.** A welcome tour on the index, another on the discussion
@@ -21,6 +23,8 @@ something on the page and says what it is.
 - **Pick targets by clicking them.** Press Pick and the forum opens in a second
   window: hover to highlight, click to capture. Press Test to see what a
   selector you already have matches.
+
+  ![Picking an element](screenshots/08-element-picker.png)
 - **Translations.** Write each step per locale. Anything untranslated falls back
   to what you typed.
 - **Formatted descriptions.** Rendered by the forum's own formatter, so Markdown,
@@ -34,6 +38,16 @@ something on the page and says what it is.
 - **Duplicate** a tour or a step.
 - **Replay.** Members can retake a tour from their settings. Moderators with the
   permission can reset one for somebody else.
+
+## More
+
+| | |
+|---|---|
+| ![Centred step](screenshots/01-welcome-centred.png) | A step with no target, shown on its own |
+| ![Click to continue](screenshots/06-click-to-continue.png) | A step that waits for the member to click |
+| ![Bottom sheet](screenshots/07-mobile-sheet.png) | The popover on a phone |
+| ![Admin](screenshots/09-admin-tours.png) | Tours, their steps, and how they are doing |
+| ![Step editor](screenshots/10-step-modal.png) | Editing a step, with Pick, Test and translations |
 
 ## Installation
 
