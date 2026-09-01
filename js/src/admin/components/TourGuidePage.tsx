@@ -136,6 +136,14 @@ export default class TourGuidePage<CustomAttrs extends ExtensionPageAttrs = Exte
           <Button icon="fas fa-pen-to-square" onclick={() => app.modal.show(EditTourModal, { tour })}>
             {app.translator.trans('datlechin-simple-tour-guide.admin.tours.edit_action')}
           </Button>
+          {/* Dragging is not something a keyboard can do, so the order has to
+              be reachable another way. */}
+          <Button icon="fas fa-arrow-up" disabled={this.tours()[0] === tour} onclick={() => this.move(tour, -1)}>
+            {app.translator.trans('datlechin-simple-tour-guide.admin.move_up')}
+          </Button>
+          <Button icon="fas fa-arrow-down" disabled={this.tours().slice(-1)[0] === tour} onclick={() => this.move(tour, 1)}>
+            {app.translator.trans('datlechin-simple-tour-guide.admin.move_down')}
+          </Button>
           <Button icon="fas fa-play" onclick={() => this.preview(tour)}>
             {app.translator.trans('datlechin-simple-tour-guide.admin.tours.preview_button')}
           </Button>
@@ -225,6 +233,21 @@ export default class TourGuidePage<CustomAttrs extends ExtensionPageAttrs = Exte
     if (tour.route() && !path) {
       app.alerts.show({ type: 'info' }, app.translator.trans('datlechin-simple-tour-guide.admin.tours.preview_navigate', { route: tour.route() }));
     }
+  }
+
+  /**
+   * Shift a tour one place, and save the whole order the same way a drag does.
+   */
+  protected move(tour: Tour, delta: number): void {
+    const tours = this.tours();
+    const from = tours.indexOf(tour);
+    const to = from + delta;
+
+    if (from < 0 || to < 0 || to >= tours.length) return;
+
+    tours.splice(to, 0, ...tours.splice(from, 1));
+
+    this.saveOrder(tours.map((moved) => moved.id()!));
   }
 
   protected duplicate(tour: Tour): void {
@@ -319,10 +342,16 @@ export default class TourGuidePage<CustomAttrs extends ExtensionPageAttrs = Exte
   }
 
   protected onsort(list: HTMLElement): void {
-    const order = Array.from(list.children)
-      .map((item) => (item as HTMLElement).dataset.id)
-      .filter((id): id is string => !!id);
+    this.saveOrder(
+      Array.from(list.children)
+        .map((item) => (item as HTMLElement).dataset.id)
+        .filter((id): id is string => !!id)
+    );
+  }
 
+  protected saveOrder(order: string[]): void {
+    // Move the store to match what the admin is already looking at, so the
+    // rebuilt list keeps the order they just chose.
     order.forEach((id, position) => {
       app.store.getById<Tour>('tour-guide-tours', id)?.pushAttributes({ position });
     });

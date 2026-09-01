@@ -6,6 +6,8 @@ datlechin-simple-tour-guide:
 
   admin:
     devices_label: Devices
+    move_up: Move up
+    move_down: Move down
 
     devices:
       any: Any device
@@ -55,7 +57,8 @@ datlechin-simple-tour-guide:
       none: No steps yet, so this tour does not run.
       no_target: Shown on its own, in the middle of the screen
       add_button: Add step
-      duplicate_button: Duplicate {title}
+      duplicate_action: Duplicate
+      controls_label: "Controls for {title}"
       copy_title: "{title} (copy)"
 
       flags:

@@ -63,8 +63,13 @@ the order in the admin area and drag anything out of place.
 
 - Descriptions are cached once rendered. After enabling or disabling a
   formatting extension, run `php flarum cache:clear`.
-- Reordering in the admin area is drag only, so it cannot be done from the
-  keyboard.
+- Lists reorder by dragging, or from each row's menu if you are not using a
+  mouse.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md). Version 2.0 is a rewrite for Flarum 2 with
+breaking changes; read the upgrade notes above before updating.
 
 ## Links
 

@@ -2,6 +2,7 @@ import app from 'flarum/admin/app';
 import Component from 'flarum/common/Component';
 import type { ComponentAttrs } from 'flarum/common/Component';
 import Button from 'flarum/common/components/Button';
+import Dropdown from 'flarum/common/components/Dropdown';
 import Icon from 'flarum/common/components/Icon';
 import Tooltip from 'flarum/common/components/Tooltip';
 import classList from 'flarum/common/utils/classList';
@@ -102,12 +103,25 @@ export default class TourStepList<CustomAttrs extends TourStepListAttrs = TourSt
             this.flag('fas fa-language', 'translated', { count: Object.keys(step.translations()).length })}
         </span>
 
-        <Button
-          className="Button Button--icon Button--flat"
-          icon="fas fa-clone"
-          aria-label={extractText(app.translator.trans('datlechin-simple-tour-guide.admin.steps.duplicate_button', { title }))}
-          onclick={() => this.duplicate(step)}
-        />
+        <Dropdown
+          className="TourStepListItem-controls"
+          buttonClassName="Button Button--icon Button--flat"
+          menuClassName="Dropdown-menu--right"
+          icon="fas fa-ellipsis-h"
+          accessibleToggleLabel={extractText(app.translator.trans('datlechin-simple-tour-guide.admin.steps.controls_label', { title }))}
+        >
+          <Button icon="fas fa-clone" onclick={() => this.duplicate(step)}>
+            {app.translator.trans('datlechin-simple-tour-guide.admin.steps.duplicate_action')}
+          </Button>
+          {/* Dragging is not something a keyboard can do, so the order has to
+              be reachable another way. */}
+          <Button icon="fas fa-arrow-up" disabled={this.steps()[0] === step} onclick={() => this.move(step, -1)}>
+            {app.translator.trans('datlechin-simple-tour-guide.admin.move_up')}
+          </Button>
+          <Button icon="fas fa-arrow-down" disabled={this.steps().slice(-1)[0] === step} onclick={() => this.move(step, 1)}>
+            {app.translator.trans('datlechin-simple-tour-guide.admin.move_down')}
+          </Button>
+        </Dropdown>
       </li>
     );
   }
@@ -122,6 +136,21 @@ export default class TourStepList<CustomAttrs extends TourStepListAttrs = TourSt
         </span>
       </Tooltip>
     );
+  }
+
+  /**
+   * Shift a step one place, and save the whole order the same way a drag does.
+   */
+  protected move(step: TourStep, delta: number): void {
+    const steps = this.steps();
+    const from = steps.indexOf(step);
+    const to = from + delta;
+
+    if (from < 0 || to < 0 || to >= steps.length) return;
+
+    steps.splice(to, 0, ...steps.splice(from, 1));
+
+    this.saveOrder(steps.map((moved) => moved.id()!));
   }
 
   protected duplicate(step: TourStep): void {
@@ -164,12 +193,16 @@ export default class TourStepList<CustomAttrs extends TourStepListAttrs = TourSt
   }
 
   protected onsort(list: HTMLElement): void {
-    const order = Array.from(list.children)
-      .map((item) => (item as HTMLElement).dataset.id)
-      .filter((id): id is string => !!id);
+    this.saveOrder(
+      Array.from(list.children)
+        .map((item) => (item as HTMLElement).dataset.id)
+        .filter((id): id is string => !!id)
+    );
+  }
 
+  protected saveOrder(order: string[]): void {
     // Move the store to match what the admin is already looking at, so the
-    // rebuilt list keeps the order they dragged it into.
+    // rebuilt list keeps the order they just chose.
     order.forEach((id, position) => {
       app.store.getById<TourStep>('tour-guide-steps', id)?.pushAttributes({ position });
     });

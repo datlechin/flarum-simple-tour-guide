@@ -22,6 +22,14 @@ export default class TourState {
 
   protected ended = false;
 
+  /**
+   * Whether anything after the current step can still be shown.
+   *
+   * Worked out when the step changes rather than on every render, because
+   * answering it means asking the page about every step still to come.
+   */
+  protected lastShowable = true;
+
   /** The element the current step points at, if it has one. */
   element: HTMLElement | null = null;
 
@@ -49,7 +57,7 @@ export default class TourState {
   }
 
   get isLast(): boolean {
-    return this.index >= this.applicable.length - 1;
+    return this.lastShowable;
   }
 
   /**
@@ -158,6 +166,10 @@ export default class TourState {
 
       this.index = index;
       this.element = element;
+      // Steps ahead can be dropped when we reach them, so counting them is not
+      // the same as knowing one will be shown. Asking now is what stops the
+      // button saying Next and then ending the tour.
+      this.lastShowable = !this.applicable.slice(index + 1).some((later) => this.applies(later));
 
       if (element) revealTarget(element);
 
