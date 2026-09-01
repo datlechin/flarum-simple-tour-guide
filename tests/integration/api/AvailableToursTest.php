@@ -127,9 +127,9 @@ class AvailableToursTest extends TourGuideTestCase
         $this->database()->table('tour_guide_steps')->where('id', 1)
             ->update(['description' => 'Some **bold** words.']);
 
-        $steps = $this->availableTo(self::MEMBER)['welcome']['steps'];
+        $steps = collect($this->availableTo(self::MEMBER)['welcome']['steps']);
 
-        $this->assertStringContainsString('<strong>bold</strong>', $steps[0]['description']);
+        $this->assertStringContainsString('<strong>bold</strong>', $steps->firstWhere('title', 'Welcome')['description']);
     }
 
     #[Test]
@@ -140,9 +140,9 @@ class AvailableToursTest extends TourGuideTestCase
         $this->database()->table('tour_guide_steps')->where('id', 1)
             ->update(['description' => 'Some **bold** words.']);
 
-        $steps = $this->availableTo(self::MEMBER)['welcome']['steps'];
+        $steps = collect($this->availableTo(self::MEMBER)['welcome']['steps']);
 
-        $this->assertStringNotContainsString('<strong>', $steps[0]['description']);
+        $this->assertStringNotContainsString('<strong>', $steps->firstWhere('title', 'Welcome')['description']);
     }
 
     #[Test]
@@ -167,8 +167,14 @@ class AvailableToursTest extends TourGuideTestCase
     #[Test]
     public function steps_come_back_in_the_order_they_run(): void
     {
+        // Positions deliberately against the ids, so anything ordering by id,
+        // or by nothing at all and taking what the database offers, fails.
+        $this->database()->table('tour_guide_steps')->where('id', 1)->update(['position' => 2]);
+        $this->database()->table('tour_guide_steps')->where('id', 2)->update(['position' => 0]);
+        $this->database()->table('tour_guide_steps')->where('id', 3)->update(['position' => 1]);
+
         $titles = array_column($this->availableTo(self::MEMBER)['welcome']['steps'], 'title');
 
-        $this->assertEquals(['Welcome', 'The header', 'Home'], $titles);
+        $this->assertEquals(['The header', 'Home', 'Welcome'], $titles);
     }
 }

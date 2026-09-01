@@ -44,8 +44,12 @@ class TourPayload
         $preview = $previewKey !== null && $actor->isAdmin();
 
         $tours = Tour::query()
-            ->with(['steps' => fn ($query) => $query->orderBy('position')->orderBy('id')])
-            ->with('steps.translations')
+            // One call, not two: a second `with` naming `steps` again would
+            // register it afresh without the ordering and quietly drop it.
+            ->with([
+                'steps' => fn ($query) => $query->orderBy('position')->orderBy('id'),
+                'steps.translations',
+            ])
             ->when($preview, fn ($query) => $query->where('key', $previewKey))
             ->when(! $preview, fn ($query) => $query->where('is_enabled', true))
             ->orderBy('position')
@@ -97,6 +101,10 @@ class TourPayload
     protected function steps(Tour $tour, string $locale): array
     {
         return $tour->steps
+            // Sorted here as well as in the query. A tour whose steps arrive in
+            // the wrong order is not a tour, and "whatever the database felt
+            // like" is exactly how the 1.x version got it wrong.
+            ->sortBy([['position', 'asc'], ['id', 'asc']])
             ->filter(fn (TourStep $step) => $step->is_enabled)
             ->map(function (TourStep $step) use ($locale) {
                 $content = $step->contentFor($locale);
