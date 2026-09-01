@@ -9,7 +9,7 @@
  * file that was distributed with this source code.
  */
 
-namespace Datlechin\FlarumSimpleTourGuide\Tests\Integration\Api;
+namespace Datlechin\FlarumSimpleTourGuide\Tests\integration\api;
 
 use Carbon\Carbon;
 use Flarum\Group\Group;
