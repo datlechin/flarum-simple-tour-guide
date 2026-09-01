@@ -2,7 +2,10 @@
 
 ## 2.0.0
 
-Requires Flarum 2.0. Run `php flarum migrate` after updating.
+The first release for Flarum 2, following the 0.2.x line for Flarum 1. The
+major version tracks Flarum's, so 2.x means Flarum 2.
+
+Requires Flarum 2.0. Run `php flarum migrate` after updating from 0.2.x.
 
 ### Breaking
 

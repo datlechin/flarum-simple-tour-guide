@@ -65,7 +65,7 @@ php flarum migrate
 php flarum cache:clear
 ```
 
-## Upgrading from 1.x
+## Upgrading from 0.x
 
 Your steps are carried over into one tour called "Welcome tour", and anyone who
 had dismissed the old tour is recorded as having finished it.
