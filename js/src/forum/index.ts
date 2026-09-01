@@ -1,84 +1,24 @@
 import app from 'flarum/forum/app';
-import { DriveStep, driver } from 'driver.js';
-import extractText from 'flarum/common/utils/extractText';
-import TourGuideStep from 'src/common/models/TourGuideStep';
-import addResetTourGuideUserControlButton from './addResetTourGuideUserControlButton';
+
+import addResetTourGuideControl from './addResetTourGuideControl';
+import addTourSettings from './addTourSettings';
+import autoStartTour from './autoStartTour';
+import startElementPicker from './startElementPicker';
+
 export { default as extend } from '../common';
 
+export { default as showTour } from './showTour';
+export { default as loadTours } from './loadTours';
+export { default as TourState } from './states/TourState';
+export { default as TourGuide } from './components/TourGuide';
+export { default as TourSettings } from './components/TourSettings';
+export { default as ElementPicker } from './components/ElementPicker';
+export { default as generateSelector } from './utils/generateSelector';
+export * from './types';
+
 app.initializers.add('datlechin/flarum-simple-tour-guide', () => {
-  addResetTourGuideUserControlButton();
-
-  document.addEventListener('DOMContentLoaded', async () => {
-    const user = app.session.user;
-
-    // @ts-ignore
-    if (!user || user.tourGuideDismissedAt()) {
-      return;
-    }
-
-    let tourGuideSteps: TourGuideStep[] = [];
-
-    await app.store.find<TourGuideStep[]>(`tour-guide-steps`).then((steps) => {
-      tourGuideSteps = steps;
-    });
-
-    const dismissTour = () => {
-      app.request({
-        url: `${app.forum.attribute('apiUrl')}/simple-tour-guide/dismiss`,
-        method: 'POST',
-      });
-    };
-
-    const getTranslation = (key: string, parameters: Record<string, string> = {}) => {
-      return extractText(app.translator.trans(`datlechin-simple-tour-guide.forum.${key}`, parameters));
-    };
-
-    const getSetting = (key: string): boolean => {
-      return app.forum.attribute(`datlechin-simple-tour-guide.${key}`);
-    };
-
-    const getSteps = (): DriveStep[] => {
-      return tourGuideSteps.map((step) => {
-        return {
-          element: step.target(),
-          popover: {
-            title: step.title(),
-            description: step.description(),
-          },
-          onDeselected: (element) => {
-            if (step.isTriggerClick()) {
-              // @ts-ignore
-              element.click();
-            }
-          },
-        };
-      });
-    };
-
-    const driverObj = driver({
-      showProgress: getSetting('showProgress'),
-      allowClose: getSetting('allowClose'),
-      smoothScroll: true,
-      overlayColor: 'var(--overlay-bg)',
-      progressText: getTranslation('progress_text', {
-        current: '{{current}}',
-        total: '{{total}}',
-      }),
-      showButtons: getSetting('skipNullElements') ? ['next'] : ['next', 'previous'],
-      nextBtnText: getTranslation('next_btn_text'),
-      prevBtnText: getTranslation('prev_btn_text'),
-      doneBtnText: getTranslation('done_btn_text'),
-      steps: getSteps(),
-      onDestroyed: () => {
-        dismissTour();
-      },
-      onHighlightStarted(element) {
-        if (!element && getSetting('skipNullElements')) {
-          setTimeout(() => driverObj.moveNext(), 10);
-        }
-      },
-    });
-
-    driverObj.drive();
-  });
+  addResetTourGuideControl();
+  addTourSettings();
+  autoStartTour();
+  startElementPicker();
 });

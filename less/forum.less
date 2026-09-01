@@ -1,215 +1,342 @@
-.driver-active .driver-overlay {
+// ---------------------------------
+// THE TOUR
+
+.TourGuide {
+  --tour-guide-arrow-size: 8px;
+}
+
+// Swallows everything aimed at the page underneath. The tour drives itself
+// with its own buttons, so nothing else needs to be reachable while it runs.
+//
+// The container is see-through to the pointer and the four panes inside it do
+// the covering, so a click-to-continue step can leave a real gap over the
+// element it is waiting for. Clicks on a pane still reach the container's
+// handler by bubbling.
+.TourGuide-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--zindex-modal-background);
   pointer-events: none;
 }
 
-.driver-active * {
-  pointer-events: none;
-}
-
-.driver-active .driver-active-element,
-.driver-active .driver-active-element *,
-.driver-popover,
-.driver-popover * {
+.TourGuide-backdrop-pane {
+  position: absolute;
   pointer-events: auto;
 }
 
-@keyframes animate-fade-in {
-  0% {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
-}
-
-.driver-fade .driver-overlay {
-  animation: animate-fade-in 200ms ease-in-out;
-}
-
-.driver-fade .driver-popover {
-  animation: animate-fade-in 200ms;
-}
-
-.driver-popover {
-  all: unset;
-  box-sizing: border-box;
-  margin: 0;
-  padding: 15px;
-  border-radius: var(--border-radius);
-  min-width: 250px;
-  max-width: 350px;
-  box-shadow: 0 7px 15px var(--shadow-color);
-  z-index: 99999;
+// A picture of a hole, and nothing else: pointer events belong to the backdrop
+// below it, which covers the same ground.
+.TourGuide-spotlight {
   position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: var(--zindex-modal-background);
+  pointer-events: none;
+  animation: TourGuide-fade-in 200ms ease-out;
+
+  path {
+    fill: var(--overlay-bg);
+    fill-rule: evenodd;
+  }
+}
+
+.TourGuide-popover {
+  position: fixed;
+  // Placed with a transform from these origins, in viewport coordinates, so
+  // the maths reads the same in either direction.
   top: 0;
-  inset-inline-end: 0;
-  background-color: var(--body-bg);
-  padding: 20px;
+  left: 0;
+  z-index: var(--zindex-modal);
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 260px;
+  max-width: ~"min(360px, calc(100vw - 24px))";
+  padding: 16px;
+  border-radius: var(--border-radius);
+  background: var(--body-bg);
+  color: var(--text-color);
+  box-shadow: 0 7px 15px var(--shadow-color);
+  animation: TourGuide-fade-in 150ms ease-out;
+
+  // On a phone there is no room to sit beside anything, so the popover becomes
+  // a sheet across the bottom of the screen and the arrow goes away.
+  &[data-side="sheet"] {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    max-width: none;
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    padding-bottom: ~"max(16px, env(safe-area-inset-bottom))";
+    animation: TourGuide-slide-up 200ms ease-out;
+  }
 }
 
-.driver-popover-title {
-  font-size: 20px;
-  font-weight: 500;
-  display: block;
-  position: relative;
-  line-height: 1.5;
+.TourGuide-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: var(--tour-guide-arrow-size) solid transparent;
+
+  .TourGuide-popover[data-side="bottom"] & {
+    bottom: 100%;
+    margin-left: calc(var(--tour-guide-arrow-size) * -1);
+    border-bottom-color: var(--body-bg);
+  }
+
+  .TourGuide-popover[data-side="top"] & {
+    top: 100%;
+    margin-left: calc(var(--tour-guide-arrow-size) * -1);
+    border-top-color: var(--body-bg);
+  }
+
+  .TourGuide-popover[data-side="right"] & {
+    right: 100%;
+    margin-top: calc(var(--tour-guide-arrow-size) * -1);
+    border-right-color: var(--body-bg);
+  }
+
+  .TourGuide-popover[data-side="left"] & {
+    left: 100%;
+    margin-top: calc(var(--tour-guide-arrow-size) * -1);
+    border-left-color: var(--body-bg);
+  }
+
+  // A step with nothing to point at, and the phone sheet, have nowhere to point.
+  .TourGuide-popover[data-side="center"] &,
+  .TourGuide-popover[data-side="sheet"] & {
+    display: none;
+  }
+}
+
+.TourGuide-preview {
+  margin: -16px -16px 12px;
+  padding: 6px 16px;
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
+  background: var(--control-warning-bg);
+  color: var(--control-warning-color);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+// Room for the close button, which floats over this corner, but only when the
+// forum offers one.
+.TourGuide-popover:has(.TourGuide-close) .TourGuide-content {
+  padding-inline-end: 26px;
+}
+
+.TourGuide-title {
   margin: 0;
-}
-
-.driver-popover-title[style*="block"] + .driver-popover-description {
-  margin-top: 5px;
-}
-
-.driver-popover-description {
-  margin-bottom: 0;
   font-size: 16px;
-  line-height: 1.5;
-  font-weight: 400;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--heading-color);
 }
 
-.driver-popover-footer {
-  margin-top: 15px;
-  text-align: right;
+// Formatted by the forum's own formatter, so it can hold anything a post can.
+.TourGuide-description {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+
+  > :first-child {
+    margin-top: 0;
+  }
+
+  > :last-child {
+    margin-bottom: 0;
+  }
+
+  p {
+    margin: 0 0 8px;
+  }
+
+  a {
+    color: var(--link-color);
+  }
+
+  // A full-width image would push the popover past the side of the screen.
+  img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--border-radius);
+  }
+
+  pre,
+  code {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+}
+
+.TourGuide-close {
+  position: absolute;
+  top: 10px;
+  inset-inline-end: 10px;
+  color: var(--muted-color);
+}
+
+.TourGuide-progressBar {
+  height: 3px;
+  margin-top: 14px;
+  border-radius: 999px;
+  background: var(--control-bg);
+  overflow: hidden;
+}
+
+.TourGuide-progressBar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary-color);
+  transition: width 200ms ease-out;
+}
+
+.TourGuide-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
 }
 
-.driver-popover-progress-text {
+.TourGuide-progress {
+  font-size: 12px;
+  color: var(--muted-color);
+}
+
+.TourGuide-hint {
   font-size: 13px;
-  font-weight: 400;
-  color: #727272;
-  zoom: 1;
+  font-weight: 600;
+  color: var(--primary-color);
 }
 
-.driver-popover-footer button {
-  --button-color: var(--button-primary-color);
-  --button-bg: var(--button-primary-bg);
-  --button-bg-hover: var(--button-primary-bg-hover);
-  --button-bg-active: var(--button-primary-bg-active);
-  --button-bg-disabled: var(--button-primary-bg-disabled);
-  font-weight: bold;
-  padding-inline-start: 20px;
-  padding-inline-end: 20px;
-  display: inline-block;
-  margin-bottom: 0;
-  text-align: center;
-  vertical-align: middle;
-  cursor: pointer;
-  white-space: nowrap;
-  line-height: 20px;
-  padding: 6px 13px;
-  border-radius: var(--border-radius);
-  user-select: none;
-  color: var(--button-color);
-  background: var(--button-bg);
-  border: 0;
+.TourGuide-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
+}
 
-  &:focus,
-  &:hover {
-    background-color: var(--button-bg-hover);
+@keyframes TourGuide-fade-in {
+  from {
+    opacity: 0;
   }
 }
 
-.driver-popover-footer .driver-popover-btn-disabled {
-  opacity: 0.5;
-  pointer-events: none;
+@keyframes TourGuide-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
 }
 
-:not(body):has(> .driver-active-element) {
-  overflow: hidden !important;
+// ---------------------------------
+// TOURS ON THE SETTINGS PAGE
+
+.TourSettingsList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-.driver-no-interaction,
-.driver-no-interaction * {
-  pointer-events: none !important;
-}
-
-.driver-popover-navigation-btns {
+.TourSettingsList-item {
   display: flex;
-  flex-grow: 1;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+
+  & + & {
+    border-top: 1px solid var(--control-bg);
+  }
 }
 
-.driver-popover-navigation-btns button + button {
-  margin-inline-start: 4px;
+.TourSettingsList-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.driver-popover-arrow {
-  content: "";
-  position: absolute;
-  border: 5px solid #fff;
+// ---------------------------------
+// THE ELEMENT PICKER
+//
+// Only ever on screen for an admin who opened the forum from the admin area to
+// point at something.
+
+.TourPicker-active {
+  cursor: crosshair;
 }
 
-.driver-popover-arrow-side-over {
-  display: none;
+.TourPicker-outline {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--zindex-modal);
+  pointer-events: none;
+  opacity: 0;
+  border-radius: var(--border-radius);
+  box-shadow:
+    0 0 0 2px var(--primary-color),
+    0 0 0 6px fade(#000, 20%);
+  transition: transform 80ms ease-out, width 80ms ease-out, height 80ms ease-out, opacity 120ms;
 }
 
-.driver-popover-arrow-side-left {
-  inset-inline-start: 100%;
-  border-right-color: transparent;
-  border-bottom-color: transparent;
-  border-top-color: transparent;
+.TourPicker-bar {
+  position: fixed;
+  inset-inline: 12px;
+  bottom: 12px;
+  z-index: var(--zindex-alerts);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: var(--border-radius);
+  background: var(--body-bg);
+  color: var(--text-color);
+  box-shadow: 0 7px 15px var(--shadow-color);
+  cursor: default;
 }
 
-.driver-popover-arrow-side-right {
-  inset-inline-end: 100%;
-  border-left-color: transparent;
-  border-bottom-color: transparent;
-  border-top-color: transparent;
+.TourPicker-bar-icon {
+  color: var(--primary-color);
 }
 
-.driver-popover-arrow-side-top {
-  top: 100%;
-  border-right-color: transparent;
-  border-bottom-color: transparent;
-  border-left-color: transparent;
+.TourPicker-bar-body {
+  flex: 1;
+  min-width: 0;
 }
 
-.driver-popover-arrow-side-bottom {
-  bottom: 100%;
-  border-left-color: transparent;
-  border-top-color: transparent;
-  border-right-color: transparent;
+.TourPicker-bar-title {
+  font-weight: 600;
+  font-size: 13px;
 }
 
-.driver-popover-arrow-side-center {
-  display: none;
+.TourPicker-bar-selector {
+  display: block;
+  padding: 0;
+  background: none;
+  color: var(--muted-color);
+  font-size: 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-.driver-popover-arrow-side-left.driver-popover-arrow-align-start,
-.driver-popover-arrow-side-right.driver-popover-arrow-align-start {
-  top: 15px;
+.TourPicker-bar-matches {
+  font-size: 12px;
+  color: var(--muted-color);
+  white-space: nowrap;
 }
 
-.driver-popover-arrow-side-top.driver-popover-arrow-align-start,
-.driver-popover-arrow-side-bottom.driver-popover-arrow-align-start {
-  inset-inline-start: 15px;
-}
-
-.driver-popover-arrow-align-end.driver-popover-arrow-side-left,
-.driver-popover-arrow-align-end.driver-popover-arrow-side-right {
-  bottom: 15px;
-}
-
-.driver-popover-arrow-side-top.driver-popover-arrow-align-end,
-.driver-popover-arrow-side-bottom.driver-popover-arrow-align-end {
-  inset-inline-end: 15px;
-}
-
-.driver-popover-arrow-side-left.driver-popover-arrow-align-center,
-.driver-popover-arrow-side-right.driver-popover-arrow-align-center {
-  top: 50%;
-  margin-top: -5px;
-}
-
-.driver-popover-arrow-side-top.driver-popover-arrow-align-center,
-.driver-popover-arrow-side-bottom.driver-popover-arrow-align-center {
-  inset-inline-start: 50%;
-  margin-inline-start: -5px;
-}
-
-.driver-popover-arrow-none {
-  display: none;
+@media (prefers-reduced-motion: reduce) {
+  .TourGuide-spotlight,
+  .TourGuide-popover,
+  .TourGuide-progressBar-fill,
+  .TourPicker-outline {
+    animation: none;
+    transition: none;
+  }
 }

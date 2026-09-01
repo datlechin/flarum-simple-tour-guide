@@ -1,18 +1,20 @@
 {
     "name": "datlechin/flarum-simple-tour-guide",
-    "description": "A simple tour guide for Flarum",
+    "description": "A guided tour that walks new members through your forum.",
     "keywords": [
         "flarum",
         "extension",
         "tour guide",
-        "simple tour guide"
+        "onboarding"
     ],
     "type": "flarum-extension",
     "license": "MIT",
     "require": {
-        "flarum/core": "^1.2.0"
+        "php": "^8.3",
+        "flarum/core": "^2.0"
     },
     "require-dev": {
+        "flarum/phpstan": "^2.0",
         "laravel/pint": "^1.16"
     },
     "authors": [
@@ -21,6 +23,12 @@
             "email": "datlechin@gmail.com",
             "role": "Developer",
             "homepage": "https://ngoquocdat.dev"
+        }
+    ],
+    "funding": [
+        {
+            "type": "github",
+            "url": "https://github.com/sponsors/datlechin"
         }
     ],
     "support": {
@@ -37,7 +45,7 @@
             "title": "Simple Tour Guide",
             "category": "feature",
             "icon": {
-                "name": "fas fa-map-signs",
+                "name": "fas fa-signs-post",
                 "color": "#fff",
                 "backgroundColor": "#D3241C"
             }
@@ -56,10 +64,18 @@
                 "typescript": true,
                 "bundlewatch": false,
                 "backendTesting": false,
+                "phpstan": true,
                 "editorConfig": true,
                 "styleci": true
             }
         }
+    },
+    "scripts": {
+        "analyse:phpstan": "phpstan analyse",
+        "clear-cache:phpstan": "phpstan clear-result-cache"
+    },
+    "scripts-descriptions": {
+        "analyse:phpstan": "Run static analysis"
     },
     "minimum-stability": "dev",
     "prefer-stable": true

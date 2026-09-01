@@ -1,0 +1,334 @@
+import app from 'flarum/admin/app';
+import ExtensionPage from 'flarum/admin/components/ExtensionPage';
+import type { ExtensionPageAttrs } from 'flarum/admin/components/ExtensionPage';
+import FormSection from 'flarum/admin/components/FormSection';
+import FormSectionGroup from 'flarum/admin/components/FormSectionGroup';
+import Button from 'flarum/common/components/Button';
+import Form from 'flarum/common/components/Form';
+import Icon from 'flarum/common/components/Icon';
+import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
+import extractText from 'flarum/common/utils/extractText';
+import type Mithril from 'mithril';
+
+import type Tour from '../../common/models/Tour';
+import EditTourModal from './EditTourModal';
+import TourStats from './TourStats';
+import TourStepList from './TourStepList';
+
+/** Named off core's wrapper, so sortablejs stays core's dependency. */
+type Sortable = typeof import('flarum/admin/utils/loadSortable')['default'];
+
+/**
+ * Where to open a preview for each of Flarum's routes that can be reached
+ * without naming a particular discussion or member.
+ */
+const ROUTE_PATHS: Record<string, string> = {
+  index: '/',
+  posts: '/posts',
+  settings: '/settings',
+  notifications: '/notifications',
+};
+
+/**
+ * Everything an admin does with tours, on one page: the tours themselves, the
+ * steps of whichever is selected, how it is doing, and the two settings that
+ * apply to all of them.
+ */
+export default class TourGuidePage<CustomAttrs extends ExtensionPageAttrs = ExtensionPageAttrs> extends ExtensionPage<CustomAttrs> {
+  private loadingTours = true;
+  private selectedId: string | null = null;
+  private sortable: Sortable | null = null;
+  private listKey = 0;
+
+  oninit(vnode: Mithril.Vnode<CustomAttrs, this>) {
+    super.oninit(vnode);
+
+    Promise.all([
+      app.store.find<Tour[]>('tour-guide-tours', { include: 'steps' }),
+      app.store.find('groups'),
+      import('flarum/admin/utils/loadSortable'),
+    ]).then(([tours, , sortable]) => {
+      this.sortable = sortable.default;
+      this.loadingTours = false;
+      this.selectedId ??= tours[0]?.id() ?? null;
+
+      m.redraw();
+    });
+  }
+
+  content() {
+    return (
+      <div className="ExtensionPage-settings TourGuidePage">
+        <div className="container">
+          <FormSectionGroup>
+            <FormSection label={app.translator.trans('datlechin-simple-tour-guide.admin.tours.heading')}>
+              {this.loadingTours ? <LoadingIndicator /> : this.tourList()}
+            </FormSection>
+
+            {this.detail()}
+
+            <FormSection label={app.translator.trans('datlechin-simple-tour-guide.admin.settings.heading')}>
+              <Form>
+                {this.settingFields()}
+                <div className="Form-group Form-controls">{this.submitButton()}</div>
+              </Form>
+            </FormSection>
+          </FormSectionGroup>
+        </div>
+      </div>
+    );
+  }
+
+  /**
+   * Built from what the extension registered, so the switches here and the
+   * ones admin search finds can never describe different things.
+   */
+  protected settingFields(): Mithril.Children {
+    return (app.registry.getSettings(this.extension.id) ?? []).map(this.buildSettingComponent.bind(this));
+  }
+
+  protected tourList(): Mithril.Children {
+    const tours = this.tours();
+
+    return (
+      <div key={this.listKey} oncreate={this.onlistcreate.bind(this)}>
+        {tours.length ? (
+          <ol className="TourList">{tours.map(this.tourItem.bind(this))}</ol>
+        ) : (
+          <p className="TourList-empty">{app.translator.trans('datlechin-simple-tour-guide.admin.tours.none')}</p>
+        )}
+
+        <div className="TourList-actions">
+          <Button className="Button Button--dashed" icon="fas fa-plus" onclick={() => app.modal.show(EditTourModal)}>
+            {app.translator.trans('datlechin-simple-tour-guide.admin.tours.add_button')}
+          </Button>
+          <Button className="Button" icon="fas fa-file-import" onclick={this.importTour.bind(this)}>
+            {app.translator.trans('datlechin-simple-tour-guide.admin.tours.import_button')}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  protected tourItem(tour: Tour): Mithril.Children {
+    const selected = tour.id() === this.selectedId;
+
+    return (
+      <li
+        className={'TourListItem' + (selected ? ' TourListItem--selected' : '') + (tour.isEnabled() ? '' : ' TourListItem--disabled')}
+        data-id={tour.id()}
+      >
+        <span className="TourListItem-handle" aria-hidden="true">
+          <Icon name="fas fa-grip-vertical" />
+        </span>
+
+        <button type="button" className="TourListItem-select" onclick={() => (this.selectedId = tour.id() ?? null)}>
+          <span className="TourListItem-title">{tour.title()}</span>
+          <span className="TourListItem-meta">
+            {app.translator.trans('datlechin-simple-tour-guide.admin.tours.step_count', { count: tour.stepCount() ?? 0 })}
+            {' · '}
+            {tour.startMode() === 'auto'
+              ? app.translator.trans('datlechin-simple-tour-guide.admin.start_mode.auto')
+              : app.translator.trans('datlechin-simple-tour-guide.admin.start_mode.manual')}
+            {tour.route() ? ` · ${tour.route()}` : ''}
+            {tour.isEnabled() ? '' : ` · ${extractText(app.translator.trans('datlechin-simple-tour-guide.admin.tours.disabled'))}`}
+          </span>
+          {/* Switched on with nothing to show is the one state that looks
+              fine in the list and does nothing on the forum. */}
+          {tour.isEnabled() && !tour.stepCount() && (
+            <span className="TourListItem-warning">
+              <Icon name="fas fa-triangle-exclamation" />
+              {app.translator.trans('datlechin-simple-tour-guide.admin.tours.no_steps_warning')}
+            </span>
+          )}
+        </button>
+
+        <span className="TourListItem-controls">
+          <Button
+            className="Button Button--icon Button--link"
+            icon="fas fa-clone"
+            aria-label={extractText(app.translator.trans('datlechin-simple-tour-guide.admin.tours.duplicate_button'))}
+            onclick={() => this.duplicate(tour)}
+          />
+          <Button
+            className="Button Button--icon Button--link"
+            icon="fas fa-play"
+            aria-label={extractText(app.translator.trans('datlechin-simple-tour-guide.admin.tours.preview_button'))}
+            onclick={() => this.preview(tour)}
+          />
+          <Button
+            className="Button Button--icon Button--link"
+            icon="fas fa-file-export"
+            aria-label={extractText(app.translator.trans('datlechin-simple-tour-guide.admin.tours.export_button'))}
+            onclick={() => this.exportTour(tour)}
+          />
+          <Button
+            className="Button Button--icon Button--link"
+            icon="fas fa-pen-to-square"
+            aria-label={extractText(app.translator.trans('datlechin-simple-tour-guide.admin.tours.edit_button', { title: tour.title() }))}
+            onclick={() => app.modal.show(EditTourModal, { tour })}
+          />
+        </span>
+      </li>
+    );
+  }
+
+  protected detail(): Mithril.Children {
+    const tour = this.selected();
+
+    if (!tour) return null;
+
+    return [
+      <FormSection label={app.translator.trans('datlechin-simple-tour-guide.admin.steps.heading', { title: tour.title() })}>
+        <TourStepList tour={tour} />
+      </FormSection>,
+
+      <FormSection label={app.translator.trans('datlechin-simple-tour-guide.admin.stats.heading')}>
+        <TourStats tour={tour} />
+      </FormSection>,
+    ];
+  }
+
+  protected tours(): Tour[] {
+    return app.store.all<Tour>('tour-guide-tours').sort((a, b) => a.position() - b.position());
+  }
+
+  protected selected(): Tour | null {
+    return this.selectedId ? app.store.getById<Tour>('tour-guide-tours', this.selectedId) ?? null : null;
+  }
+
+  /**
+   * Opens the forum with the tour running, whether or not it is enabled and
+   * whether or not this admin has already been through it. Nothing is recorded.
+   */
+  protected preview(tour: Tour): void {
+    const url = new URL(app.forum.attribute<string>('baseUrl'));
+
+    url.searchParams.set('tour-preview', tour.key());
+
+    // A tour bound to a page has nothing to show anywhere else, so the preview
+    // opens on that page where it can. Where it cannot, because the route needs
+    // to know which discussion or which member, the forum holds the preview
+    // until the admin navigates there.
+    const path = ROUTE_PATHS[tour.route() ?? ''];
+
+    if (path) url.pathname = path;
+
+    window.open(url.toString(), '_blank', 'noopener');
+
+    if (tour.route() && !path) {
+      app.alerts.show({ type: 'info' }, app.translator.trans('datlechin-simple-tour-guide.admin.tours.preview_navigate', { route: tour.route() }));
+    }
+  }
+
+  protected duplicate(tour: Tour): void {
+    app
+      .request({
+        method: 'POST',
+        url: `${app.forum.attribute('apiUrl')}/tour-guide-tours/${tour.id()}/duplicate`,
+      })
+      .then(async () => {
+        await app.store.find<Tour[]>('tour-guide-tours', { include: 'steps' });
+
+        this.listKey++;
+
+        m.redraw();
+      });
+  }
+
+  protected exportTour(tour: Tour): void {
+    app
+      .request<Record<string, unknown>>({
+        method: 'GET',
+        url: `${app.forum.attribute('apiUrl')}/tour-guide-tours/${tour.id()}/export`,
+      })
+      .then((document) => {
+        const blob = new Blob([JSON.stringify(document, null, 2)], { type: 'application/json' });
+        const link = window.document.createElement('a');
+
+        link.href = URL.createObjectURL(blob);
+        link.download = `tour-${tour.key()}.json`;
+        link.click();
+
+        URL.revokeObjectURL(link.href);
+      });
+  }
+
+  protected importTour(): void {
+    const input = window.document.createElement('input');
+
+    input.type = 'file';
+    input.accept = 'application/json,.json';
+
+    input.onchange = async () => {
+      const file = input.files?.[0];
+
+      if (!file) return;
+
+      let body: unknown;
+
+      try {
+        body = JSON.parse(await file.text());
+      } catch {
+        app.alerts.show({ type: 'error' }, app.translator.trans('datlechin-simple-tour-guide.admin.tours.import_invalid'));
+
+        return;
+      }
+
+      app
+        .request({
+          method: 'POST',
+          url: `${app.forum.attribute('apiUrl')}/tour-guide-tours/import`,
+          body,
+        })
+        .then(async () => {
+          await app.store.find<Tour[]>('tour-guide-tours', { include: 'steps' });
+
+          this.listKey++;
+
+          app.alerts.show({ type: 'success' }, app.translator.trans('datlechin-simple-tour-guide.admin.tours.import_done'));
+
+          m.redraw();
+        });
+    };
+
+    input.click();
+  }
+
+  protected onlistcreate(vnode: Mithril.VnodeDOM): void {
+    const list = (vnode.dom as HTMLElement).querySelector<HTMLElement>('.TourList');
+
+    if (!list || !this.sortable) return;
+
+    this.sortable.create(list, {
+      handle: '.TourListItem-handle',
+      animation: 150,
+      delay: 50,
+      delayOnTouchOnly: true,
+      touchStartThreshold: 5,
+      dragClass: 'sortable-dragging',
+      ghostClass: 'sortable-placeholder',
+      onSort: () => this.onsort(list),
+    });
+  }
+
+  protected onsort(list: HTMLElement): void {
+    const order = Array.from(list.children)
+      .map((item) => (item as HTMLElement).dataset.id)
+      .filter((id): id is string => !!id);
+
+    order.forEach((id, position) => {
+      app.store.getById<Tour>('tour-guide-tours', id)?.pushAttributes({ position });
+    });
+
+    app.request({
+      url: `${app.forum.attribute('apiUrl')}/tour-guide-tours/order`,
+      method: 'POST',
+      body: { order },
+    });
+
+    this.listKey++;
+
+    m.redraw();
+  }
+}
