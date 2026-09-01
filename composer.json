@@ -15,7 +15,9 @@
     },
     "require-dev": {
         "flarum/phpstan": "^2.0",
-        "laravel/pint": "^1.16"
+        "flarum/testing": "^2.0",
+        "laravel/pint": "^1.16",
+        "flarum/markdown": "^2.0"
     },
     "authors": [
         {
@@ -63,7 +65,7 @@
                 "prettier": true,
                 "typescript": true,
                 "bundlewatch": false,
-                "backendTesting": false,
+                "backendTesting": true,
                 "phpstan": true,
                 "editorConfig": true,
                 "styleci": true
@@ -71,12 +73,25 @@
         }
     },
     "scripts": {
+        "test": [
+            "@test:integration"
+        ],
+        "test:integration": "phpunit -c tests/phpunit.integration.xml",
+        "test:setup": "@php tests/integration/setup.php",
         "analyse:phpstan": "phpstan analyse",
         "clear-cache:phpstan": "phpstan clear-result-cache"
     },
     "scripts-descriptions": {
+        "test": "Runs all tests.",
+        "test:integration": "Runs all integration tests.",
+        "test:setup": "Sets up a database for use with integration tests. Execute this only once.",
         "analyse:phpstan": "Run static analysis"
     },
     "minimum-stability": "dev",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "autoload-dev": {
+        "psr-4": {
+            "Datlechin\\FlarumSimpleTourGuide\\Tests\\": "tests/"
+        }
+    }
 }
