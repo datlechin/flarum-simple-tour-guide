@@ -1,6 +1,6 @@
 {
     "name": "datlechin/flarum-simple-tour-guide",
-    "description": "A guided tour that walks new members through your forum.",
+    "description": "Guided tours that walk new members through your forum.",
     "keywords": [
         "flarum",
         "extension",
@@ -44,7 +44,7 @@
     },
     "extra": {
         "flarum-extension": {
-            "title": "Simple Tour Guide",
+            "title": "Tour Guide",
             "category": "feature",
             "icon": {
                 "name": "fas fa-signs-post",

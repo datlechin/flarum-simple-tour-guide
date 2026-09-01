@@ -4,9 +4,11 @@ import type { ExtensionPageAttrs } from 'flarum/admin/components/ExtensionPage';
 import FormSection from 'flarum/admin/components/FormSection';
 import FormSectionGroup from 'flarum/admin/components/FormSectionGroup';
 import Button from 'flarum/common/components/Button';
+import Dropdown from 'flarum/common/components/Dropdown';
 import Form from 'flarum/common/components/Form';
 import Icon from 'flarum/common/components/Icon';
 import LoadingIndicator from 'flarum/common/components/LoadingIndicator';
+import classList from 'flarum/common/utils/classList';
 import extractText from 'flarum/common/utils/extractText';
 import type Mithril from 'mithril';
 
@@ -114,63 +116,67 @@ export default class TourGuidePage<CustomAttrs extends ExtensionPageAttrs = Exte
     const selected = tour.id() === this.selectedId;
 
     return (
-      <li
-        className={'TourListItem' + (selected ? ' TourListItem--selected' : '') + (tour.isEnabled() ? '' : ' TourListItem--disabled')}
-        data-id={tour.id()}
-      >
+      <li className={classList('TourListItem', { 'TourListItem--selected': selected, 'TourListItem--off': !tour.isEnabled() })} data-id={tour.id()}>
         <span className="TourListItem-handle" aria-hidden="true">
           <Icon name="fas fa-grip-vertical" />
         </span>
 
-        <button type="button" className="TourListItem-select" onclick={() => (this.selectedId = tour.id() ?? null)}>
+        <button type="button" className="TourListItem-main" onclick={() => (this.selectedId = tour.id() ?? null)} aria-current={selected}>
           <span className="TourListItem-title">{tour.title()}</span>
-          <span className="TourListItem-meta">
-            {app.translator.trans('datlechin-simple-tour-guide.admin.tours.step_count', { count: tour.stepCount() ?? 0 })}
-            {' · '}
-            {tour.startMode() === 'auto'
-              ? app.translator.trans('datlechin-simple-tour-guide.admin.start_mode.auto')
-              : app.translator.trans('datlechin-simple-tour-guide.admin.start_mode.manual')}
-            {tour.route() ? ` · ${tour.route()}` : ''}
-            {tour.isEnabled() ? '' : ` · ${extractText(app.translator.trans('datlechin-simple-tour-guide.admin.tours.disabled'))}`}
-          </span>
-          {/* Switched on with nothing to show is the one state that looks
-              fine in the list and does nothing on the forum. */}
-          {tour.isEnabled() && !tour.stepCount() && (
-            <span className="TourListItem-warning">
-              <Icon name="fas fa-triangle-exclamation" />
-              {app.translator.trans('datlechin-simple-tour-guide.admin.tours.no_steps_warning')}
-            </span>
-          )}
+          <span className="TourListItem-meta">{this.meta(tour)}</span>
         </button>
 
-        <span className="TourListItem-controls">
-          <Button
-            className="Button Button--icon Button--link"
-            icon="fas fa-clone"
-            aria-label={extractText(app.translator.trans('datlechin-simple-tour-guide.admin.tours.duplicate_button'))}
-            onclick={() => this.duplicate(tour)}
-          />
-          <Button
-            className="Button Button--icon Button--link"
-            icon="fas fa-play"
-            aria-label={extractText(app.translator.trans('datlechin-simple-tour-guide.admin.tours.preview_button'))}
-            onclick={() => this.preview(tour)}
-          />
-          <Button
-            className="Button Button--icon Button--link"
-            icon="fas fa-file-export"
-            aria-label={extractText(app.translator.trans('datlechin-simple-tour-guide.admin.tours.export_button'))}
-            onclick={() => this.exportTour(tour)}
-          />
-          <Button
-            className="Button Button--icon Button--link"
-            icon="fas fa-pen-to-square"
-            aria-label={extractText(app.translator.trans('datlechin-simple-tour-guide.admin.tours.edit_button', { title: tour.title() }))}
-            onclick={() => app.modal.show(EditTourModal, { tour })}
-          />
-        </span>
+        <Dropdown
+          className="TourListItem-controls"
+          buttonClassName="Button Button--icon Button--flat"
+          menuClassName="Dropdown-menu--right"
+          icon="fas fa-ellipsis-h"
+          accessibleToggleLabel={extractText(app.translator.trans('datlechin-simple-tour-guide.admin.tours.controls_label', { title: tour.title() }))}
+        >
+          <Button icon="fas fa-pen-to-square" onclick={() => app.modal.show(EditTourModal, { tour })}>
+            {app.translator.trans('datlechin-simple-tour-guide.admin.tours.edit_action')}
+          </Button>
+          <Button icon="fas fa-play" onclick={() => this.preview(tour)}>
+            {app.translator.trans('datlechin-simple-tour-guide.admin.tours.preview_button')}
+          </Button>
+          <Button icon="fas fa-clone" onclick={() => this.duplicate(tour)}>
+            {app.translator.trans('datlechin-simple-tour-guide.admin.tours.duplicate_button')}
+          </Button>
+          <Button icon="fas fa-file-export" onclick={() => this.exportTour(tour)}>
+            {app.translator.trans('datlechin-simple-tour-guide.admin.tours.export_button')}
+          </Button>
+        </Dropdown>
       </li>
     );
+  }
+
+  /**
+   * The one line under a tour's name that says how it behaves, in the order
+   * somebody scanning the list would ask: how big, when, where.
+   */
+  protected meta(tour: Tour): Mithril.Children {
+    const parts: Mithril.Children[] = [
+      app.translator.trans('datlechin-simple-tour-guide.admin.tours.step_count', { count: tour.stepCount() ?? 0 }),
+      tour.startMode() === 'auto'
+        ? app.translator.trans('datlechin-simple-tour-guide.admin.start_mode.auto')
+        : app.translator.trans('datlechin-simple-tour-guide.admin.start_mode.manual'),
+    ];
+
+    if (tour.route()) parts.push(tour.route());
+    if (!tour.isEnabled()) parts.push(app.translator.trans('datlechin-simple-tour-guide.admin.tours.disabled'));
+
+    // Switched on with nothing to show is the one state that reads as fine in
+    // the list and does nothing on the forum.
+    if (tour.isEnabled() && !tour.stepCount()) {
+      parts.push(
+        <span className="TourListItem-warning">
+          <Icon name="fas fa-triangle-exclamation" />
+          {app.translator.trans('datlechin-simple-tour-guide.admin.tours.no_steps_warning')}
+        </span>
+      );
+    }
+
+    return parts.map((part, index) => (index ? [' · ', part] : part));
   }
 
   protected detail(): Mithril.Children {

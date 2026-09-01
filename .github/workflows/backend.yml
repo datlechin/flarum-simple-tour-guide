@@ -1,4 +1,4 @@
-name: Simple Tour Guide PHP
+name: Tour Guide PHP
 
 on: [workflow_dispatch, push, pull_request]
 

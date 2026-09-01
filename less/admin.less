@@ -1,8 +1,9 @@
 // ---------------------------------
-// SHARED LIST LOOK
+// LISTS
 //
-// Tours and steps are both reorderable lists of rows with a drag handle, so
-// they share their bones and differ only in what each row says.
+// Tours and steps are both reorderable lists of rows: a drag handle, a button
+// that is the row, and its controls. They share their bones and differ only in
+// what each row says.
 
 .TourList,
 .TourStepList {
@@ -16,8 +17,7 @@
 .TourStepListItem {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: 4px;
   border-radius: var(--border-radius);
 
   &:hover {
@@ -27,6 +27,7 @@
 
 .TourListItem-handle,
 .TourStepListItem-handle {
+  padding: 0 4px 0 8px;
   cursor: grab;
   color: var(--muted-more-color);
 
@@ -35,38 +36,19 @@
   }
 }
 
-.TourListItem--disabled,
-.TourStepListItem--disabled {
-  opacity: 0.55;
-}
-
-.sortable-placeholder {
-  border: 2px dashed var(--control-bg);
-  border-radius: var(--border-radius);
-
-  * {
-    visibility: hidden;
-  }
-}
-
-// ---------------------------------
-// TOURS
-
-.TourListItem--selected {
-  background: var(--control-bg);
-  box-shadow: inset 3px 0 0 var(--primary-color);
-}
-
-.TourListItem-select {
+// The row itself is the button, the way a tag row is on the tags page: the
+// whole thing is the target, not a link buried inside it.
+.TourListItem-main,
+.TourStepListItem-main {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 1px;
   flex: 1;
   // Without this the flex item refuses to shrink, and a long name pushes the
   // controls off the end instead of being truncated.
   min-width: 0;
-  padding: 0;
+  padding: 8px 4px;
   border: 0;
   background: none;
   color: inherit;
@@ -74,7 +56,8 @@
   cursor: pointer;
 }
 
-.TourListItem-title {
+.TourListItem-title,
+.TourStepListItem-title {
   font-weight: 600;
   max-width: 100%;
   overflow: hidden;
@@ -82,7 +65,8 @@
   text-overflow: ellipsis;
 }
 
-.TourListItem-meta {
+.TourListItem-meta,
+.TourStepListItem-target {
   font-size: 12px;
   color: var(--muted-color);
   max-width: 100%;
@@ -91,18 +75,59 @@
   text-overflow: ellipsis;
 }
 
-.TourListItem-warning {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--control-warning-color);
+.TourStepListItem-target code {
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-size: inherit;
 }
 
-.TourListItem-controls {
+// Selected reads the way the admin navigation reads, because it is the same
+// idea: this is the thing the rest of the page is about.
+.TourListItem--selected {
+  &,
+  &:hover {
+    background: var(--control-color);
+  }
+
+  .TourListItem-title {
+    color: var(--body-bg);
+  }
+
+  .TourListItem-meta {
+    color: var(--body-bg);
+    opacity: 0.8;
+  }
+
+  .TourListItem-handle,
+  .Button {
+    color: var(--body-bg);
+  }
+}
+
+// Switched off is said in words in the row's own meta line, so it only needs
+// to be quieter here, not faded out.
+.TourListItem--off,
+.TourStepListItem--off {
+  .TourListItem-title,
+  .TourStepListItem-title {
+    font-weight: normal;
+    color: var(--muted-color);
+  }
+}
+
+.TourListItem-warning {
+  color: var(--control-warning-color);
+
+  .icon {
+    margin-inline-end: 4px;
+  }
+}
+
+.TourStepListItem-flags {
   display: flex;
-  gap: 2px;
+  gap: 8px;
+  padding: 0 4px;
   color: var(--muted-color);
 }
 
@@ -118,60 +143,27 @@
   flex-wrap: wrap;
 }
 
-// ---------------------------------
-// STEPS
-
 .TourStepList-body {
   max-width: 640px;
 }
 
-.TourStepListItem-info {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-}
+.sortable-placeholder {
+  border: 2px dashed var(--control-bg);
+  border-radius: var(--border-radius);
 
-.TourStepListItem-title {
-  font-weight: 600;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.TourStepListItem-target {
-  font-size: 12px;
-  color: var(--muted-color);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-
-  code {
-    padding: 0;
-    background: none;
-    color: inherit;
-    font-size: inherit;
+  * {
+    visibility: hidden;
   }
 }
 
-.TourStepListItem-flags {
-  display: flex;
-  gap: 6px;
-  color: var(--muted-color);
-}
-
-.TourStepListItem-edit {
-  color: var(--muted-color);
-}
-
 // ---------------------------------
-// STATS
+// STATISTICS
 
 .TourStats-figures {
   display: flex;
   flex-wrap: wrap;
-  gap: 24px;
-  margin-bottom: 16px;
+  gap: 32px;
+  margin-bottom: 20px;
 }
 
 .TourStats-figure {
@@ -180,10 +172,10 @@
 }
 
 .TourStats-figure-value {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 600;
-  color: var(--heading-color);
   line-height: 1.2;
+  color: var(--heading-color);
 }
 
 .TourStats-figure-label {

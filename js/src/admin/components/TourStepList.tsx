@@ -4,6 +4,7 @@ import type { ComponentAttrs } from 'flarum/common/Component';
 import Button from 'flarum/common/components/Button';
 import Icon from 'flarum/common/components/Icon';
 import Tooltip from 'flarum/common/components/Tooltip';
+import classList from 'flarum/common/utils/classList';
 import extractText from 'flarum/common/utils/extractText';
 import type Mithril from 'mithril';
 
@@ -76,43 +77,36 @@ export default class TourStepList<CustomAttrs extends TourStepListAttrs = TourSt
   protected stepItem(step: TourStep): Mithril.Children {
     const title = step.title();
     const target = step.target();
-    const translated = Object.keys(step.translations()).length;
 
     return (
-      <li className={'TourStepListItem' + (step.isEnabled() ? '' : ' TourStepListItem--disabled')} data-id={step.id()}>
+      <li className={classList('TourStepListItem', { 'TourStepListItem--off': !step.isEnabled() })} data-id={step.id()}>
         {/* Dragging is the only way to reorder, and that is not something a
             keyboard can do, so the handle is not announced as if it were. */}
         <span className="TourStepListItem-handle" aria-hidden="true">
           <Icon name="fas fa-grip-vertical" />
         </span>
 
-        <span className="TourStepListItem-info">
+        <button type="button" className="TourStepListItem-main" onclick={() => app.modal.show(EditTourStepModal, { tour: this.attrs.tour, step })}>
           <span className="TourStepListItem-title">{title}</span>
           <span className="TourStepListItem-target">
             {target ? <code>{target}</code> : app.translator.trans('datlechin-simple-tour-guide.admin.steps.no_target')}
           </span>
-        </span>
+        </button>
 
         <span className="TourStepListItem-flags">
           {!step.isEnabled() && this.flag('fas fa-eye-slash', 'disabled')}
           {step.devices() !== 'any' && this.flag(step.devices() === 'mobile' ? 'fas fa-mobile-screen' : 'fas fa-desktop', step.devices())}
           {step.clicksTarget() && this.flag('fas fa-hand-pointer', 'clicks_target')}
           {step.advanceOnClick() && this.flag('fas fa-arrow-pointer', 'advance_on_click')}
-          {!!translated && this.flag('fas fa-language', 'translated', { count: translated })}
+          {!!Object.keys(step.translations()).length &&
+            this.flag('fas fa-language', 'translated', { count: Object.keys(step.translations()).length })}
         </span>
 
         <Button
-          className="Button Button--icon Button--link TourStepListItem-edit"
+          className="Button Button--icon Button--flat"
           icon="fas fa-clone"
           aria-label={extractText(app.translator.trans('datlechin-simple-tour-guide.admin.steps.duplicate_button', { title }))}
           onclick={() => this.duplicate(step)}
-        />
-
-        <Button
-          className="Button Button--icon Button--link TourStepListItem-edit"
-          icon="fas fa-pen-to-square"
-          aria-label={extractText(app.translator.trans('datlechin-simple-tour-guide.admin.steps.edit_button', { title }))}
-          onclick={() => app.modal.show(EditTourStepModal, { tour: this.attrs.tour, step })}
         />
       </li>
     );

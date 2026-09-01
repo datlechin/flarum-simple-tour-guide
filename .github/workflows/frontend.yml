@@ -1,4 +1,4 @@
-name: Simple Tour Guide JS
+name: Tour Guide JS
 
 on: [workflow_dispatch, push, pull_request]
 
