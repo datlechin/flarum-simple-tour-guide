@@ -13,16 +13,20 @@ something on the page and says what it is.
   page, a what-is-new tour after an upgrade. Each keeps its own record of who
   has taken it.
 - **Bound to a page.** A tour names the route it belongs to and waits for it, so
-  a member who lands somewhere else still gets it when they arrive.
+  a member who lands somewhere else still gets it when they arrive. Leaving the
+  page ends the tour, the way Flarum closes a modal. Steps for another page
+  belong in a tour of their own.
 - **Desktop and mobile.** Mark a tour or a step for one or the other. On a phone
   the popover becomes a bottom sheet.
-- **Steps that do not fit are skipped**, so the progress count is always right.
-  A step with no target is shown in the middle of the screen.
+- **Steps that do not fit are skipped.** The count covers every step meant for
+  the device, so it jumps ahead past a step whose element is missing. A step with
+  no target is shown in the middle of the screen.
 - **Steps can drive the page.** A step can click what it highlights, so the next
   one can point inside a menu. Or it can wait for the member to click it.
 - **Pick targets by clicking them.** Press Pick and the forum opens in a second
-  window: hover to highlight, click to capture. Press Test to see what a
-  selector you already have matches.
+  window on the tour's page: hover to highlight, click to capture. Press Test to
+  see what a selector you already have matches. The step editor warns when a
+  target was picked on a page the tour does not run on.
 
   ![Picking an element](screenshots/08-element-picker.png)
 - **Translations.** Write each step per locale. Anything untranslated falls back
@@ -75,8 +79,6 @@ the order in the admin area and drag anything out of place.
 
 ## Notes
 
-- Descriptions are cached once rendered. After enabling or disabling a
-  formatting extension, run `php flarum cache:clear`.
 - Lists reorder by dragging, or from each row's menu if you are not using a
   mouse.
 

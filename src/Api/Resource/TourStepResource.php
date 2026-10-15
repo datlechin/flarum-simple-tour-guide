@@ -12,22 +12,25 @@
 namespace Datlechin\FlarumSimpleTourGuide\Api\Resource;
 
 use Datlechin\FlarumSimpleTourGuide\Tour;
-use Datlechin\FlarumSimpleTourGuide\TourCompletion;
 use Datlechin\FlarumSimpleTourGuide\TourStep;
-use Datlechin\FlarumSimpleTourGuide\TourStepTranslation;
+use Flarum\Api\Context;
 use Flarum\Api\Endpoint;
 use Flarum\Api\Resource\AbstractDatabaseResource;
 use Flarum\Api\Schema;
-use Flarum\Api\Sort\SortColumn;
-use Tobyz\JsonApiServer\Context;
+use Flarum\Locale\TranslatorInterface;
+use Flarum\User\User;
+use Tobyz\JsonApiServer\Context as BaseContext;
 
 /**
- * Editing steps, which only admins do.
- *
  * @extends AbstractDatabaseResource<TourStep>
  */
 class TourStepResource extends AbstractDatabaseResource
 {
+    public function __construct(
+        protected TranslatorInterface $translator,
+    ) {
+    }
+
     public function type(): string
     {
         return 'tour-guide-steps';
@@ -41,38 +44,55 @@ class TourStepResource extends AbstractDatabaseResource
     public function endpoints(): array
     {
         return [
-            Endpoint\Index::make()->admin()->defaultSort('position'),
             Endpoint\Show::make()->admin(),
             Endpoint\Create::make()->admin(),
             Endpoint\Update::make()->admin(),
             Endpoint\Delete::make()->admin(),
+            Endpoint\Create::make('duplicate')
+                ->route('POST', '/{id}/duplicate')
+                ->admin()
+                ->action(fn (Context $context) => $this->duplicate($context->model)),
         ];
     }
 
     public function fields(): array
     {
+        $admin = fn (TourStep $step, Context $context) => $context->getActor()->isAdmin();
+
         return [
             Schema\Str::make('title')
                 ->requiredOnCreate()
                 ->writable()
+                ->rule('filled')
                 ->maxLength(255)
+                ->visible($admin)
                 ->set(fn (TourStep $step, string $value) => $step->title = trim($value)),
 
             Schema\Str::make('description')
+                ->property('content')
                 ->requiredOnCreate()
                 ->writable()
+                ->rule('filled')
                 ->maxLength(2000)
-                ->set(fn (TourStep $step, string $value) => $step->description = trim($value)),
+                ->visible($admin)
+                ->set(fn (TourStep $step, string $value, Context $context) => $step->setContentAttribute(trim($value), $context->getActor())),
 
-            // A CSS selector for the element this step points at. Leave it
-            // empty and the step is shown on its own in the middle of the
-            // screen, which is what a welcome or a sign-off wants.
+            Schema\Str::make('localizedTitle')
+                ->get(fn (TourStep $step) => $step->translationFor($this->translator->getLocale())?->title ?: $step->title),
+
+            Schema\Str::make('descriptionHtml')
+                ->get(function (TourStep $step, Context $context) {
+                    $translation = $step->translationFor($this->translator->getLocale());
+
+                    return ($translation?->parsed_content ? $translation : $step)->formatContent($context->request);
+                }),
+
             Schema\Str::make('target')
                 ->writable()
                 ->nullable()
                 ->maxLength(255)
                 ->regex('/^[^\r\n]*$/')
-                ->set(fn (TourStep $step, ?string $value) => $step->target = ($value === null || trim($value) === '') ? null : trim($value)),
+                ->set(fn (TourStep $step, ?string $value) => $step->target = trim((string) $value) ?: null),
 
             Schema\Str::make('placement')
                 ->writable()
@@ -82,75 +102,62 @@ class TourStepResource extends AbstractDatabaseResource
                 ->writable()
                 ->in(Tour::deviceOptions()),
 
-            Schema\Boolean::make('isEnabled')->writable(),
+            Schema\Boolean::make('clicksTarget')
+                ->writable(),
 
-            // Clicks the highlighted element on the way to the next step, so a
-            // tour can open a dropdown and then point inside it.
-            Schema\Boolean::make('clicksTarget')->writable(),
+            Schema\Boolean::make('advanceOnClick')
+                ->writable(),
 
-            // Waits for the member to click the highlighted element rather
-            // than offering a Next button.
-            Schema\Boolean::make('advanceOnClick')->writable(),
+            Schema\Boolean::make('isEnabled')
+                ->writable()
+                ->visible($admin),
 
-            // Ordering is decided for the tour as a whole, by the order
-            // endpoint, so a single step cannot rewrite it on its own.
-            Schema\Integer::make('position'),
+            Schema\Integer::make('position')
+                ->visible($admin),
 
-            // Wording per locale, as `{"vi": {"title": ..., "description": ...}}`.
-            // One attribute rather than a resource of its own: the admin edits
-            // every language of a step in one form and saves it once.
             Schema\Arr::make('translations')
                 ->writable()
-                ->get(fn (TourStep $step) => $step->translations
-                    ->mapWithKeys(fn (TourStepTranslation $t) => [
-                        $t->locale => ['title' => $t->title, 'description' => $t->description],
-                    ])
-                    ->all())
-                ->save(fn (TourStep $step, mixed $value) => $this->syncTranslations($step, (array) $value)),
+                ->visible($admin)
+                ->get(fn (TourStep $step) => $step->translationMap())
+                ->save(fn (TourStep $step, mixed $value, Context $context) => $this->syncTranslations($step, (array) $value, $context->getActor())),
 
             Schema\Relationship\ToOne::make('tour')
                 ->type('tour-guide-tours')
-                ->writable()
+                ->writableOnCreate()
                 ->requiredOnCreate()
                 ->includable(),
         ];
     }
 
-    public function sorts(): array
+    public function creating(object $model, BaseContext $context): ?object
     {
-        return [
-            SortColumn::make('position'),
-        ];
-    }
-
-    public function creating(object $model, Context $context): ?object
-    {
-        /** @var TourStep $model */
-        $model->position = ((int) TourStep::query()->where('tour_id', $model->tour_id)->max('position')) + 1;
+        $model->position = TourStep::nextPosition(TourStep::query()->where('tour_id', $model->tour_id));
 
         return $model;
     }
 
-    /**
-     * Take the step's wording with it, and forget it as anybody's last step.
-     *
-     * Not left to the foreign keys, which SQLite does not enforce by default.
-     */
-    public function deleting(object $model, Context $context): void
+    protected function duplicate(TourStep $original): TourStep
     {
-        /** @var TourStep $model */
-        TourStepTranslation::query()->where('step_id', $model->id)->delete();
-        TourCompletion::query()->where('last_step_id', $model->id)->update(['last_step_id' => null]);
+        return $original->getConnection()->transaction(function () use ($original) {
+            $copy = $original->replicate(['created_at', 'updated_at']);
+            $copy->title = $this->translator->trans('datlechin-simple-tour-guide.admin.steps.copy_title', ['title' => $original->title]);
+            $copy->position = TourStep::nextPosition(TourStep::query()->where('tour_id', $original->tour_id));
+            $copy->save();
 
-        parent::deleting($model, $context);
+            foreach ($original->translations as $translation) {
+                $copy->translations()->save($translation->replicate(['step_id', 'created_at', 'updated_at']));
+            }
+
+            return $copy;
+        });
     }
 
     /**
-     * @param array<string, mixed> $translations
+     * @param array<mixed> $translations
      */
-    protected function syncTranslations(TourStep $step, array $translations): void
+    protected function syncTranslations(TourStep $step, array $translations, User $actor): void
     {
-        $keep = [];
+        $kept = [];
 
         foreach ($translations as $locale => $content) {
             if (! is_string($locale) || ! is_array($content)) {
@@ -160,25 +167,17 @@ class TourStepResource extends AbstractDatabaseResource
             $title = trim((string) ($content['title'] ?? ''));
             $description = trim((string) ($content['description'] ?? ''));
 
-            // A language the admin cleared out is a language they no longer
-            // want an override for, not an override that says nothing.
+            // A language cleared of both fields no longer overrides anything.
             if ($title === '' && $description === '') {
                 continue;
             }
 
-            TourStepTranslation::query()->updateOrCreate(
-                ['step_id' => $step->id, 'locale' => $locale],
-                ['title' => $title, 'description' => $description]
-            );
+            $step->saveTranslation($locale, $title, $description, $actor);
 
-            $keep[] = $locale;
+            $kept[] = $locale;
         }
 
-        TourStepTranslation::query()
-            ->where('step_id', $step->id)
-            ->whereNotIn('locale', $keep ?: [''])
-            ->delete();
-
+        $step->translations()->whereNotIn('locale', $kept)->delete();
         $step->unsetRelation('translations');
     }
 }

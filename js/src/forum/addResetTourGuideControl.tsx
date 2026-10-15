@@ -9,16 +9,9 @@ import type Mithril from 'mithril';
 
 import { resetTours } from './loadTours';
 
-/**
- * Offer to send a member through their tours again, to whoever is allowed to:
- * a moderator with the permission, or the member themselves.
- */
 export default function addResetTourGuideControl(): void {
   extend(UserControls, 'moderationControls', (items: ItemList<Mithril.Children>, user: User) => {
-    // The count only reaches people who may act on it, so an absent one means
-    // either "not allowed to know" or "has taken no tours". Neither is
-    // something to offer a reset for.
-    if (!user.canResetTourGuide() || !user.tourGuideCompletionCount()) return;
+    if (!user.canResetTourGuide()) return;
 
     items.add(
       'resetTourGuide',
@@ -30,12 +23,9 @@ export default function addResetTourGuideControl(): void {
 }
 
 function resetTourGuide(user: User): void {
-  const confirmation = extractText(app.translator.trans('datlechin-simple-tour-guide.forum.user_controls.reset_tour_guide_confirmation'));
-
-  if (!confirm(confirmation)) return;
+  if (!confirm(extractText(app.translator.trans('datlechin-simple-tour-guide.forum.user_controls.reset_tour_guide_confirmation')))) return;
 
   resetTours(user.id()!).then(() => {
-    user.pushAttributes({ tourGuideCompletionCount: 0 });
-    m.redraw();
+    app.alerts.show({ type: 'success' }, app.translator.trans('datlechin-simple-tour-guide.forum.user_controls.reset_tour_guide_done'));
   });
 }

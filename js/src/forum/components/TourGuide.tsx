@@ -11,73 +11,57 @@ import type Mithril from 'mithril';
 
 import type TourState from '../states/TourState';
 import computePlacement from '../utils/computePlacement';
-import type { Box, Size, TourSide } from '../utils/computePlacement';
+import type { TourSide } from '../utils/computePlacement';
 import spotlightPath from '../utils/spotlightPath';
-import { isMobile } from '../utils/device';
-import { isRendered } from '../utils/target';
+import { isPhone } from '../utils/device';
+import { isPresent, revealTarget } from '../utils/target';
 
 export interface TourGuideAttrs extends ComponentAttrs {
   state: TourState;
 }
 
-/** Named off the factory, so the focus-trap package stays core's dependency. */
 type FocusTrap = ReturnType<typeof createFocusTrap>;
 
-/** Breathing room between the highlighted element and the edge of the cutout. */
 const SPOTLIGHT_PADDING = 6;
 
 const SPOTLIGHT_RADIUS = 6;
 
-/**
- * The tour itself: a dimmed page with a hole cut in it around the element the
- * current step is about, and a popover pointing at it.
- *
- * Position is written straight to the DOM on every frame rather than through a
- * redraw, because it has to track a page that scrolls, animates and reflows
- * underneath it, and none of that is state Mithril knows about.
- */
 export default class TourGuide<CustomAttrs extends TourGuideAttrs = TourGuideAttrs> extends Component<CustomAttrs> {
   private titleId = generateElementId();
 
   private popover: HTMLElement | null = null;
   private arrow: HTMLElement | null = null;
   private cutout: SVGPathElement | null = null;
-  private panes: HTMLElement[] = [];
 
   private frame: number | null = null;
   private trap: FocusTrap | null = null;
+  private closeWatcher: CloseWatcher | null = null;
 
-  /** The element currently wired up to advance the tour when clicked. */
-  private awaited: HTMLElement | null = null;
+  private shown: { step: unknown; element: HTMLElement | null } = { step: null, element: null };
 
-  /** The geometry the popover was last laid out for, so identical frames cost nothing. */
+  // Last laid-out geometry, so an unchanged frame costs nothing.
   private geometry = '';
 
   view(): Mithril.Children {
-    const step = this.attrs.state.current;
+    const state = this.attrs.state;
 
-    if (!step) return null;
+    if (!state.current) return null;
 
     return (
-      <div className="TourGuide" role="presentation">
-        {/* Two layers, because they do two jobs: the backdrop swallows every
-            click on the page underneath, and the cutout above it is only ever
-            a picture. */}
-        {/* Four panes rather than one clipped box. `clip-path: path()` with a
-            fill-rule is not something every browser parses, and when it fails
-            it fails silently and the whole page stays covered, which swallows
-            the very click a click-to-continue step is waiting for. */}
-        <div className="TourGuide-backdrop" onclick={this.onbackdropclick.bind(this)}>
-          <span className="TourGuide-backdrop-pane" />
-          <span className="TourGuide-backdrop-pane" />
-          <span className="TourGuide-backdrop-pane" />
-          <span className="TourGuide-backdrop-pane" />
-        </div>
-        <svg className="TourGuide-spotlight" aria-hidden="true">
+      <div className="TourGuide" role="presentation" onclick={this.contain.bind(this)}>
+        {/* The evenodd hole is not hit-tested, so clicks in it reach the element. Only a click-to-continue step leaves it open. */}
+        <svg className="TourGuide-spotlight" aria-hidden="true" onclick={this.onbackdropclick.bind(this)}>
           <path fill-rule="evenodd" />
         </svg>
+        {!state.awaitingClick && <div className="TourGuide-backdrop" onclick={this.onbackdropclick.bind(this)} />}
 
-        <div className="TourGuide-popover" role="dialog" aria-modal="true" aria-labelledby={this.titleId}>
+        <div
+          className="TourGuide-popover"
+          role="dialog"
+          tabindex="-1"
+          aria-modal={state.awaitingClick ? 'false' : 'true'}
+          aria-labelledby={this.titleId}
+        >
           <span className="TourGuide-arrow" aria-hidden="true" />
           {this.items().toArray()}
         </div>
@@ -92,22 +76,19 @@ export default class TourGuide<CustomAttrs extends TourGuideAttrs = TourGuideAtt
 
     if (!step) return items;
 
-    if (state.tour.preview) {
+    if (state.preview) {
       items.add('preview', <div className="TourGuide-preview">{app.translator.trans('datlechin-simple-tour-guide.forum.preview_notice')}</div>, 110);
     }
 
     items.add(
       'content',
-      // The dialog stays put from one step to the next, so a screen reader has
-      // no new dialog to announce. This is what tells it the words changed.
+      // The dialog stays put between steps, so this is what tells a screen reader the words changed.
       <div className="TourGuide-content" aria-live="polite">
         <h3 className="TourGuide-title" id={this.titleId}>
-          {step.title}
+          {step.localizedTitle()}
         </h3>
-        {/* HTML from the forum's own formatter, written by an admin. Flarum
-            already trusts admins with the custom header, footer and CSS, so
-            this is the same trust boundary, not a new one. */}
-        <div className="TourGuide-description">{m.trust(step.description)}</div>
+        {/* Rendered by the forum's formatter from what an admin wrote, the same trust as the custom header and footer. */}
+        <div className="TourGuide-description">{m.trust(step.descriptionHtml())}</div>
       </div>,
       100
     );
@@ -155,7 +136,7 @@ export default class TourGuide<CustomAttrs extends TourGuideAttrs = TourGuideAtt
     const items = new ItemList<Mithril.Children>();
     const state = this.attrs.state;
 
-    if (!state.isFirst) {
+    if (state.hasPrevious) {
       items.add(
         'previous',
         <Button className="Button Button--link TourGuide-previous" onclick={() => state.previous()}>
@@ -165,8 +146,6 @@ export default class TourGuide<CustomAttrs extends TourGuideAttrs = TourGuideAtt
       );
     }
 
-    // The whole point of this step is the reader doing the thing, so there is
-    // no button offering to do it for them.
     if (state.awaitingClick) {
       items.add(
         'awaitingClick',
@@ -182,12 +161,7 @@ export default class TourGuide<CustomAttrs extends TourGuideAttrs = TourGuideAtt
 
     items.add(
       'next',
-      <Button
-        className="Button Button--primary TourGuide-next"
-        onclick={() => {
-          void state.next();
-        }}
-      >
+      <Button className="Button Button--primary TourGuide-next" onclick={() => state.next()}>
         {state.isLast
           ? app.translator.trans('datlechin-simple-tour-guide.forum.done_button')
           : app.translator.trans('datlechin-simple-tour-guide.forum.next_button')}
@@ -198,42 +172,57 @@ export default class TourGuide<CustomAttrs extends TourGuideAttrs = TourGuideAtt
     return items;
   }
 
+  onbeforeupdate(vnode: Mithril.VnodeDOM<CustomAttrs, this>): boolean {
+    super.onbeforeupdate(vnode);
+
+    this.attrs.state.sync();
+
+    return true;
+  }
+
   oncreate(vnode: Mithril.VnodeDOM<CustomAttrs, this>): void {
     super.oncreate(vnode);
 
     this.popover = this.element.querySelector('.TourGuide-popover');
     this.arrow = this.element.querySelector('.TourGuide-arrow');
     this.cutout = this.element.querySelector('.TourGuide-spotlight path');
-    this.panes = Array.from(this.element.querySelectorAll<HTMLElement>('.TourGuide-backdrop-pane'));
 
     if (this.popover) {
       this.trap = createFocusTrap(this.popover, {
-        // Escape is handled here, so that it can respect the forum's setting.
         escapeDeactivates: false,
-        // The backdrop is outside the trap and has a job of its own, and on a
-        // click-to-continue step so is the highlighted element.
         allowOutsideClick: true,
-        initialFocus: '.TourGuide-next',
-        fallbackFocus: '.TourGuide-popover',
+        initialFocus: () => this.popover!.querySelector<HTMLElement>('.TourGuide-next') ?? this.popover!,
+        fallbackFocus: () => this.popover!,
       });
 
       this.trap.activate();
     }
 
-    document.addEventListener('keydown', this.onkeydown);
+    window.addEventListener('click', this.onclickcapture, true);
 
-    this.syncAwaitedElement();
+    if (this.allowClose()) {
+      if ('CloseWatcher' in window) {
+        this.closeWatcher = new CloseWatcher();
+        this.closeWatcher.onclose = () => this.dismiss();
+      } else {
+        document.addEventListener('keydown', this.onkeydown);
+      }
+    }
+
+    this.stepShown();
     this.tick();
   }
 
   onupdate(vnode: Mithril.VnodeDOM<CustomAttrs, this>): void {
     super.onupdate(vnode);
 
-    // A new step is new geometry even when its element happens to sit exactly
-    // where the last one did.
-    this.geometry = '';
+    const { current, element } = this.attrs.state;
 
-    this.syncAwaitedElement();
+    if (current !== this.shown.step || element !== this.shown.element) this.stepShown();
+
+    // Before this frame paints, not on the next tick, so a new step never shows at the old spot.
+    this.geometry = '';
+    this.reposition();
   }
 
   onremove(vnode: Mithril.VnodeDOM<CustomAttrs, this>): void {
@@ -241,10 +230,10 @@ export default class TourGuide<CustomAttrs extends TourGuideAttrs = TourGuideAtt
 
     if (this.frame !== null) cancelAnimationFrame(this.frame);
 
+    window.removeEventListener('click', this.onclickcapture, true);
     document.removeEventListener('keydown', this.onkeydown);
 
-    this.releaseAwaitedElement();
-
+    this.closeWatcher?.destroy();
     this.trap?.deactivate();
   }
 
@@ -256,45 +245,49 @@ export default class TourGuide<CustomAttrs extends TourGuideAttrs = TourGuideAtt
     return !!app.forum.attribute<boolean>('datlechin-simple-tour-guide.allowClose');
   }
 
+  protected dismiss(): void {
+    this.attrs.state.end('dismissed');
+
+    m.redraw();
+  }
+
   protected onbackdropclick(): void {
     if (this.allowClose()) this.attrs.state.end('dismissed');
   }
 
-  private onkeydown = (event: KeyboardEvent): void => {
-    if (event.key !== 'Escape' || !this.allowClose()) return;
-
-    event.preventDefault();
-
-    this.attrs.state.end('dismissed');
-
-    m.redraw();
-  };
-
-  /**
-   * On a click-to-continue step the tour listens to the element it points at,
-   * so the reader's own click is what moves them on.
-   */
-  private syncAwaitedElement(): void {
-    const wanted = this.attrs.state.awaitingClick ? this.attrs.state.element : null;
-
-    if (wanted === this.awaited) return;
-
-    this.releaseAwaitedElement();
-
-    if (wanted) {
-      this.awaited = wanted;
-      wanted.addEventListener('click', this.onawaitedclick);
+  // Bootstrap closes every open menu on a document click, including the one a step points into. Links and the click that ends the tour go through.
+  protected contain(event: MouseEvent): void {
+    if (!this.attrs.state.ended && !(event.target as Element).closest('a[href]')) {
+      event.stopPropagation();
     }
   }
 
-  private releaseAwaitedElement(): void {
-    this.awaited?.removeEventListener('click', this.onawaitedclick);
-    this.awaited = null;
-  }
+  private onclickcapture = (event: MouseEvent): void => {
+    const state = this.attrs.state;
 
-  private onawaitedclick = (): void => {
-    void this.attrs.state.next();
+    if (state.awaitingClick && state.element?.contains(event.target as Node)) {
+      state.clicked();
+    }
   };
+
+  private onkeydown = (event: KeyboardEvent): void => {
+    // A menu that took the Escape closes first, and the tour stays.
+    if (event.key === 'Escape' && !event.defaultPrevented) {
+      event.preventDefault();
+      this.dismiss();
+    }
+  };
+
+  private stepShown(): void {
+    const { current, element, awaitingClick } = this.attrs.state;
+
+    this.shown = { step: current, element };
+
+    if (element) revealTarget(element);
+
+    // On a click-to-continue step the keyboard has to reach the element too.
+    this.trap?.updateContainerElements(awaitingClick && element ? [this.popover!, element] : this.popover!);
+  }
 
   private tick = (): void => {
     this.reposition();
@@ -302,48 +295,22 @@ export default class TourGuide<CustomAttrs extends TourGuideAttrs = TourGuideAtt
     this.frame = requestAnimationFrame(this.tick);
   };
 
-  /**
-   * Cover the viewport with four panes arranged around `hole`, or with one
-   * pane over everything when there is no hole.
-   */
-  private layOutBackdrop(viewport: Size, hole: Box | null): void {
-    const [top, bottom, left, right] = this.panes;
-
-    if (!hole) {
-      place(top, 0, 0, viewport.width, viewport.height);
-      place(bottom, 0, 0, 0, 0);
-      place(left, 0, 0, 0, 0);
-      place(right, 0, 0, 0, 0);
-
-      return;
-    }
-
-    const holeBottom = hole.top + hole.height;
-    const holeRight = hole.left + hole.width;
-
-    place(top, 0, 0, viewport.width, hole.top);
-    place(bottom, 0, holeBottom, viewport.width, viewport.height - holeBottom);
-    place(left, 0, hole.top, hole.left, hole.height);
-    place(right, holeRight, hole.top, viewport.width - holeRight, hole.height);
-  }
-
   private reposition(): void {
-    if (!this.popover || !this.arrow || !this.cutout || this.panes.length < 4) return;
+    if (!this.popover || !this.arrow || !this.cutout) return;
 
     const state = this.attrs.state;
-    const viewport = { width: document.documentElement.clientWidth, height: document.documentElement.clientHeight };
-    const popover = { width: this.popover.offsetWidth, height: this.popover.offsetHeight };
-    // A target can be taken off the page while the tour is pointing at it. On
-    // a click-to-continue step that would leave the reader waiting for a click
-    // that can never land, so the step gives up and offers a button instead.
-    if (state.element && !isRendered(state.element)) {
-      state.forgetElement();
+
+    // Gone between redraws: the next redraw resolves the target again.
+    if (state.element && !isPresent(state.element)) {
+      state.element = null;
       m.redraw();
     }
 
+    const viewport = { width: document.documentElement.clientWidth, height: document.documentElement.clientHeight };
+    const popover = { width: this.popover.offsetWidth, height: this.popover.offsetHeight };
     const rect = state.element?.getBoundingClientRect() ?? null;
     const step = state.current;
-    const sheet = isMobile();
+    const sheet = isPhone();
 
     const signature = [
       rect?.top,
@@ -354,35 +321,26 @@ export default class TourGuide<CustomAttrs extends TourGuideAttrs = TourGuideAtt
       viewport.height,
       popover.width,
       popover.height,
-      step?.placement,
+      step?.placement(),
       sheet,
-      state.awaitingClick,
     ].join('/');
 
     if (signature === this.geometry) return;
 
     this.geometry = signature;
 
-    // A hidden element measures zero, which is not something to cut a hole
-    // around; the step falls back to standing on its own.
-    const spotlight =
-      rect && rect.width > 0 && rect.height > 0
-        ? {
-            top: rect.top - SPOTLIGHT_PADDING,
-            left: rect.left - SPOTLIGHT_PADDING,
-            width: rect.width + SPOTLIGHT_PADDING * 2,
-            height: rect.height + SPOTLIGHT_PADDING * 2,
-          }
-        : null;
+    const spotlight = rect
+      ? {
+          top: rect.top - SPOTLIGHT_PADDING,
+          left: rect.left - SPOTLIGHT_PADDING,
+          width: rect.width + SPOTLIGHT_PADDING * 2,
+          height: rect.height + SPOTLIGHT_PADDING * 2,
+        }
+      : null;
 
     this.cutout.setAttribute('d', spotlightPath(viewport, spotlight, SPOTLIGHT_RADIUS));
 
-    // A gap in the cover only on a step that is waiting for the reader to click
-    // the thing. Every other step keeps the page sealed.
-    this.layOutBackdrop(viewport, state.awaitingClick ? spotlight : null);
-
-    // On a phone the popover is a sheet across the bottom of the screen: there
-    // is no room to sit beside a target, and nowhere for an arrow to point.
+    // A phone has no room beside the element, so the popover is a sheet across the bottom.
     if (sheet) {
       this.popover.style.transform = '';
       this.popover.dataset.side = 'sheet';
@@ -390,25 +348,16 @@ export default class TourGuide<CustomAttrs extends TourGuideAttrs = TourGuideAtt
       return;
     }
 
-    const preferred = (step && step.placement !== 'auto' ? step.placement : 'bottom') as Exclude<TourSide, 'center'>;
+    const placement = step?.placement();
+    const preferred = (placement && placement !== 'auto' ? placement : 'bottom') as Exclude<TourSide, 'center'>;
+    const position = computePlacement(spotlight, popover, viewport, preferred);
 
-    const placement = computePlacement(spotlight, popover, viewport, preferred);
+    this.popover.style.transform = `translate3d(${Math.round(position.left)}px, ${Math.round(position.top)}px, 0)`;
+    this.popover.dataset.side = position.side;
 
-    this.popover.style.transform = `translate3d(${Math.round(placement.left)}px, ${Math.round(placement.top)}px, 0)`;
-    this.popover.dataset.side = placement.side;
+    const alongTheTop = position.side === 'top' || position.side === 'bottom';
 
-    // Physical offsets, because they come from viewport coordinates that are
-    // already the right way round in either reading direction.
-    const alongTheTop = placement.side === 'top' || placement.side === 'bottom';
-
-    this.arrow.style.left = alongTheTop ? `${Math.round(placement.arrowOffset)}px` : '';
-    this.arrow.style.top = alongTheTop ? '' : `${Math.round(placement.arrowOffset)}px`;
+    this.arrow.style.left = alongTheTop ? `${Math.round(position.arrowOffset)}px` : '';
+    this.arrow.style.top = alongTheTop ? '' : `${Math.round(position.arrowOffset)}px`;
   }
-}
-
-function place(pane: HTMLElement, left: number, top: number, width: number, height: number): void {
-  pane.style.left = `${Math.round(left)}px`;
-  pane.style.top = `${Math.round(top)}px`;
-  pane.style.width = `${Math.max(0, Math.round(width))}px`;
-  pane.style.height = `${Math.max(0, Math.round(height))}px`;
 }

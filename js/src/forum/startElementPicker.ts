@@ -1,30 +1,29 @@
 import app from 'flarum/forum/app';
 import { extend } from 'flarum/common/extend';
-import type Page from 'flarum/common/components/Page';
 
 import ElementPicker from './components/ElementPicker';
+import type { ElementPickerAttrs } from './components/ElementPicker';
 
-/** Query parameters the admin area puts on the forum URL it opens. */
-const MODE_PARAM = 'tour-picker';
-const SELECTOR_PARAM = 'tour-selector';
-
+// Read once: the query string is gone after the first navigation, and the picker stays for the whole visit.
+let launch: ElementPickerAttrs | null = null;
 let mounted = false;
 
-/**
- * Turn the forum into a selector picker when the admin area asks it to.
- */
+export function pickerActive(): boolean {
+  return launch !== null;
+}
+
 export default function startElementPicker(): void {
-  extend('flarum/common/components/Page', 'oncreate', () => {
-    if (mounted) return;
-
+  app.beforeMount(() => {
     const params = new URLSearchParams(window.location.search);
-    const mode = params.get(MODE_PARAM);
+    const mode = params.get('tour-picker');
 
-    if (mode !== 'pick' && mode !== 'test') return;
+    if ((mode === 'pick' || mode === 'test') && app.session.user?.isAdmin()) {
+      launch = { mode, selector: params.get('tour-selector'), route: params.get('tour-route') };
+    }
+  });
 
-    // Only an admin gets a picker. Anybody can put this in their address bar,
-    // and for everybody else it should do nothing at all.
-    if (!app.session.user?.isAdmin()) return;
+  extend('flarum/common/components/Page', 'oncreate', () => {
+    if (!launch || mounted) return;
 
     mounted = true;
 
@@ -32,8 +31,6 @@ export default function startElementPicker(): void {
     container.className = 'TourPickerContainer';
     document.body.append(container);
 
-    m.mount(container, {
-      view: () => m(ElementPicker, { mode, selector: params.get(SELECTOR_PARAM) }),
-    });
+    m.mount(container, { view: () => m(ElementPicker, launch!) });
   });
 }

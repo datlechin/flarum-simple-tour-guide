@@ -13,23 +13,15 @@ namespace Datlechin\FlarumSimpleTourGuide;
 
 use Carbon\Carbon;
 use Flarum\Database\AbstractModel;
-use Flarum\User\User;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * A record that somebody has been through a tour, and where they stopped.
- *
  * @property int $id
  * @property int $user_id
  * @property int $tour_id
  * @property string $outcome
  * @property int|null $last_step_id
  * @property Carbon $completed_at
- * @property-read User $user
- * @property-read Tour $tour
- *
- * @method static Builder<static> query()
  */
 class TourCompletion extends AbstractModel
 {
@@ -37,8 +29,6 @@ class TourCompletion extends AbstractModel
     public const OUTCOME_DISMISSED = 'dismissed';
 
     protected $table = 'tour_guide_completions';
-
-    protected $fillable = ['user_id', 'tour_id', 'outcome', 'last_step_id', 'completed_at'];
 
     public $timestamps = false;
 
@@ -50,19 +40,19 @@ class TourCompletion extends AbstractModel
     ];
 
     /**
-     * @return BelongsTo<User, $this>
-     */
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'user_id');
-    }
-
-    /**
      * @return BelongsTo<Tour, $this>
      */
     public function tour(): BelongsTo
     {
         return $this->belongsTo(Tour::class, 'tour_id');
+    }
+
+    /**
+     * @return BelongsTo<TourStep, $this>
+     */
+    public function lastStep(): BelongsTo
+    {
+        return $this->belongsTo(TourStep::class, 'last_step_id');
     }
 
     public static function outcomes(): array

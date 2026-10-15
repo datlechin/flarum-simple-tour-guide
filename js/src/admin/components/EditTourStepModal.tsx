@@ -13,7 +13,10 @@ import type Mithril from 'mithril';
 import type Tour from '../../common/models/Tour';
 import type TourStep from '../../common/models/TourStep';
 import type { StepTranslations } from '../../common/models/TourStep';
-import pickElement from '../utils/pickElement';
+import routeMatches from '../../common/utils/routeMatches';
+import deviceOptions from '../utils/deviceOptions';
+import { pickElement, testTarget } from '../utils/openForum';
+import type { PickedElement } from '../utils/openForum';
 
 export interface EditTourStepModalAttrs extends IFormModalAttrs {
   tour: Tour;
@@ -32,13 +35,10 @@ export default class EditTourStepModal<CustomAttrs extends EditTourStepModalAttr
   clicksTarget!: Stream<boolean>;
   advanceOnClick!: Stream<boolean>;
 
-  /** Wording per locale, edited one language at a time. */
   translations!: StepTranslations;
   locale!: Stream<string>;
 
-  /** How many elements the target matched, the last time we asked the forum. */
-  matches: number | null = null;
-
+  picked: PickedElement | null = null;
   picking = false;
 
   oninit(vnode: Mithril.Vnode<CustomAttrs, this>) {
@@ -188,6 +188,8 @@ export default class EditTourStepModal<CustomAttrs extends EditTourStepModalAttr
   }
 
   protected targetField(invalidTarget: boolean): Mithril.Children {
+    const mismatch = this.routeMismatch();
+
     return (
       <div className="Form-group">
         <label>{app.translator.trans('datlechin-simple-tour-guide.admin.step_modal.target_label')}</label>
@@ -201,10 +203,15 @@ export default class EditTourStepModal<CustomAttrs extends EditTourStepModalAttr
             spellcheck={false}
             placeholder={extractText(app.translator.trans('datlechin-simple-tour-guide.admin.step_modal.target_placeholder'))}
           />
-          <Button className="Button" icon="fas fa-crosshairs" loading={this.picking} onclick={() => this.pick('pick')}>
+          <Button className="Button" icon="fas fa-crosshairs" loading={this.picking} onclick={() => this.pick()}>
             {app.translator.trans('datlechin-simple-tour-guide.admin.step_modal.pick_button')}
           </Button>
-          <Button className="Button" icon="fas fa-eye" disabled={!this.target().trim() || invalidTarget} onclick={() => this.pick('test')}>
+          <Button
+            className="Button"
+            icon="fas fa-eye"
+            disabled={!this.target().trim() || invalidTarget}
+            onclick={() => testTarget(this.attrs.tour, this.target().trim())}
+          >
             {app.translator.trans('datlechin-simple-tour-guide.admin.step_modal.test_button')}
           </Button>
         </div>
@@ -214,8 +221,13 @@ export default class EditTourStepModal<CustomAttrs extends EditTourStepModalAttr
             <span className="EditTourStepModal-invalidTarget">
               {app.translator.trans('datlechin-simple-tour-guide.admin.step_modal.target_invalid')}
             </span>
-          ) : this.matches !== null ? (
-            app.translator.trans('datlechin-simple-tour-guide.admin.step_modal.target_matches', { count: this.matches })
+          ) : mismatch ? (
+            <span className="EditTourStepModal-routeWarning">
+              {app.translator.trans('datlechin-simple-tour-guide.admin.step_modal.target_route_mismatch', {
+                picked: mismatch,
+                route: this.attrs.tour.route(),
+              })}
+            </span>
           ) : (
             app.translator.trans('datlechin-simple-tour-guide.admin.step_modal.target_help')
           )}
@@ -273,10 +285,6 @@ export default class EditTourStepModal<CustomAttrs extends EditTourStepModalAttr
     this.translations[locale] = { ...existing, [key]: value };
   }
 
-  /**
-   * The target is typed or picked, so it is worth saying "that is not a
-   * selector" here rather than letting the tour quietly skip the step later.
-   */
   invalidTarget(): boolean {
     const selector = this.target().trim();
 
@@ -291,20 +299,29 @@ export default class EditTourStepModal<CustomAttrs extends EditTourStepModalAttr
     }
   }
 
-  protected pick(mode: 'pick' | 'test'): void {
-    this.picking = mode === 'pick';
+  protected pick(): void {
+    this.picking = true;
 
-    pickElement(mode, this.target().trim() || null).then((picked) => {
+    pickElement(this.attrs.tour).then((picked) => {
       this.picking = false;
 
       if (picked) {
-        if (mode === 'pick') this.target(picked.selector);
-
-        this.matches = picked.matches;
+        this.picked = picked;
+        this.target(picked.selector);
       }
 
       m.redraw();
     });
+  }
+
+  // The route the target was picked on, when it is not a page this tour runs on. Editing the target by hand clears it.
+  protected routeMismatch(): string | null {
+    const picked = this.picked;
+    const route = this.attrs.tour.route();
+
+    if (!picked || route === null || picked.selector !== this.target().trim() || routeMatches(route, picked.route)) return null;
+
+    return picked.route ?? '';
   }
 
   onsubmit(e: SubmitEvent) {
@@ -328,26 +345,20 @@ export default class EditTourStepModal<CustomAttrs extends EditTourStepModalAttr
           translations: this.translations,
           relationships: this.step.exists ? undefined : { tour: this.attrs.tour },
         },
-        { meta: undefined }
+        { errorHandler: this.onerror.bind(this) }
       )
-      .then(() => this.hide(), this.loaded.bind(this));
+      .then(this.hide.bind(this))
+      .catch(() => {
+        this.loading = false;
+        m.redraw();
+      });
   }
 
   deleteStep() {
-    const confirmation = extractText(app.translator.trans('datlechin-simple-tour-guide.admin.step_modal.delete_confirmation'));
-
-    if (!confirm(confirmation)) return;
+    if (!confirm(extractText(app.translator.trans('datlechin-simple-tour-guide.admin.step_modal.delete_confirmation')))) return;
 
     this.loading = true;
 
-    this.step.delete().then(() => this.hide(), this.loaded.bind(this));
+    this.step.delete().then(this.hide.bind(this), this.loaded.bind(this));
   }
-}
-
-export function deviceOptions(): Record<string, string> {
-  return {
-    any: extractText(app.translator.trans('datlechin-simple-tour-guide.admin.devices.any')),
-    desktop: extractText(app.translator.trans('datlechin-simple-tour-guide.admin.devices.desktop')),
-    mobile: extractText(app.translator.trans('datlechin-simple-tour-guide.admin.devices.mobile')),
-  };
 }

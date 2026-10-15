@@ -13,13 +13,8 @@ namespace Datlechin\FlarumSimpleTourGuide\Tests\integration\api;
 
 use Carbon\Carbon;
 use Flarum\Group\Group;
-use Flarum\User\User;
 use PHPUnit\Framework\Attributes\Test;
 
-/**
- * What the forum is told, which is deliberately much less than the admin area
- * can see.
- */
 class AvailableToursTest extends TourGuideTestCase
 {
     #[Test]
@@ -36,18 +31,25 @@ class AvailableToursTest extends TourGuideTestCase
     #[Test]
     public function guest_is_offered_nothing(): void
     {
-        $response = $this->send($this->request('GET', '/api/tour-guide/available'));
+        $response = $this->send($this->request('GET', '/api/tour-guide-tours'));
 
-        $this->assertContains($response->getStatusCode(), [401, 403]);
+        $this->assertEquals(401, $response->getStatusCode());
     }
 
     #[Test]
-    public function audience_rules_never_reach_the_browser(): void
+    public function audience_rules_and_raw_content_never_reach_a_member(): void
     {
-        $tours = $this->availableTo(self::MEMBER);
+        $tour = $this->availableTo(self::MEMBER)['welcome'];
 
-        $this->assertArrayNotHasKey('groupIds', $tours['welcome']);
-        $this->assertArrayNotHasKey('maxAccountAgeDays', $tours['welcome']);
+        $this->assertArrayNotHasKey('isEnabled', $tour);
+        $this->assertArrayNotHasKey('maxAccountAgeDays', $tour);
+        $this->assertArrayNotHasKey('position', $tour);
+        $this->assertNotContains('groups', $tour['relationships']);
+        $this->assertNotContains('steps', $tour['relationships']);
+
+        foreach (['title', 'description', 'translations', 'isEnabled', 'position'] as $attribute) {
+            $this->assertArrayNotHasKey($attribute, $tour['steps'][0]);
+        }
     }
 
     #[Test]
@@ -56,6 +58,7 @@ class AvailableToursTest extends TourGuideTestCase
         $this->database()->table('tour_guide_tours')->where('id', 1)->update(['is_enabled' => 0]);
 
         $this->assertArrayNotHasKey('welcome', $this->availableTo(self::MEMBER));
+        $this->assertArrayNotHasKey('welcome', $this->tours(self::MEMBER));
     }
 
     #[Test]
@@ -67,7 +70,7 @@ class AvailableToursTest extends TourGuideTestCase
     }
 
     #[Test]
-    public function a_tour_whose_every_step_is_off_is_not_a_tour(): void
+    public function a_tour_whose_every_step_is_off_is_not_offered(): void
     {
         $this->database()->table('tour_guide_steps')->update(['is_enabled' => 0]);
 
@@ -75,32 +78,40 @@ class AvailableToursTest extends TourGuideTestCase
     }
 
     #[Test]
+    public function admin_is_offered_only_what_a_member_would_be(): void
+    {
+        $this->database()->table('tour_guide_tours')->where('id', 1)->update(['is_enabled' => 0]);
+
+        $this->assertArrayNotHasKey('welcome', $this->availableTo(self::ADMIN));
+    }
+
+    #[Test]
     public function admin_may_preview_a_disabled_tour(): void
     {
         $this->database()->table('tour_guide_tours')->where('id', 1)->update(['is_enabled' => 0]);
 
-        $tours = $this->availableTo(self::ADMIN, ['preview' => 'welcome']);
-
-        $this->assertArrayHasKey('welcome', $tours);
-        $this->assertTrue($tours['welcome']['preview']);
-    }
-
-    #[Test]
-    public function member_may_not_preview_a_disabled_tour(): void
-    {
-        $this->database()->table('tour_guide_tours')->where('id', 1)->update(['is_enabled' => 0]);
-
-        $this->assertArrayNotHasKey('welcome', $this->availableTo(self::MEMBER, ['preview' => 'welcome']));
+        $this->assertCount(3, $this->tours(self::ADMIN)['welcome']['steps']);
     }
 
     #[Test]
     public function tour_aimed_at_a_group_skips_everybody_else(): void
     {
-        $this->database()->table('tour_guide_tours')->where('id', 1)
-            ->update(['group_ids' => json_encode([Group::ADMINISTRATOR_ID])]);
+        $this->database()->table('tour_guide_tour_group')->insert(['tour_id' => 1, 'group_id' => Group::ADMINISTRATOR_ID]);
 
         $this->assertArrayNotHasKey('welcome', $this->availableTo(self::MEMBER));
         $this->assertArrayHasKey('welcome', $this->availableTo(self::ADMIN));
+    }
+
+    #[Test]
+    public function tour_aimed_at_members_reaches_confirmed_accounts_only(): void
+    {
+        $this->database()->table('tour_guide_tour_group')->insert(['tour_id' => 1, 'group_id' => Group::MEMBER_ID]);
+
+        $this->assertArrayHasKey('welcome', $this->availableTo(self::MEMBER));
+
+        $this->database()->table('users')->where('id', self::MEMBER)->update(['is_email_confirmed' => 0]);
+
+        $this->assertArrayNotHasKey('welcome', $this->availableTo(self::MEMBER));
     }
 
     #[Test]
@@ -110,8 +121,7 @@ class AvailableToursTest extends TourGuideTestCase
 
         $this->assertArrayHasKey('welcome', $this->availableTo(self::MEMBER));
 
-        $this->database()->table('users')->where('id', self::MEMBER)
-            ->update(['joined_at' => Carbon::now()->subDays(30)]);
+        $this->database()->table('users')->where('id', self::MEMBER)->update(['joined_at' => Carbon::now()->subDays(30)]);
 
         $this->assertArrayNotHasKey('welcome', $this->availableTo(self::MEMBER));
     }
@@ -119,62 +129,55 @@ class AvailableToursTest extends TourGuideTestCase
     #[Test]
     public function a_description_is_formatted_the_way_a_post_would_be(): void
     {
-        // With flarum/markdown on, a description gets Markdown, because the
-        // description goes through the forum's own formatter rather than
-        // anything this extension invented.
         $this->extension('flarum-markdown', 'datlechin-simple-tour-guide');
 
-        $this->database()->table('tour_guide_steps')->where('id', 1)
-            ->update(['description' => 'Some **bold** words.']);
+        $this->patchStep(1, ['description' => 'Some **bold** words.']);
 
-        $steps = collect($this->availableTo(self::MEMBER)['welcome']['steps']);
-
-        $this->assertStringContainsString('<strong>bold</strong>', $steps->firstWhere('title', 'Welcome')['description']);
+        $this->assertStringContainsString('<strong>bold</strong>', $this->availableTo(self::MEMBER)['welcome']['steps'][0]['descriptionHtml']);
     }
 
     #[Test]
     public function a_description_gets_no_markdown_when_the_forum_has_none(): void
     {
-        // The flip side, and the reason this is the right way round: the tour
-        // follows the forum's formatting rather than imposing its own.
-        $this->database()->table('tour_guide_steps')->where('id', 1)
-            ->update(['description' => 'Some **bold** words.']);
+        $this->patchStep(1, ['description' => 'Some **bold** words.']);
 
-        $steps = collect($this->availableTo(self::MEMBER)['welcome']['steps']);
-
-        $this->assertStringNotContainsString('<strong>', $steps->firstWhere('title', 'Welcome')['description']);
+        $this->assertStringNotContainsString('<strong>', $this->availableTo(self::MEMBER)['welcome']['steps'][0]['descriptionHtml']);
     }
 
     #[Test]
     public function member_reads_a_step_in_their_own_language(): void
     {
         $this->database()->table('tour_guide_step_translations')->insert([
-            'step_id' => 1,
-            'locale' => 'xx',
-            'title' => 'Translated title',
-            'description' => 'Translated body.',
-            'created_at' => Carbon::now(),
-            'updated_at' => Carbon::now(),
+            ['step_id' => 1, 'locale' => 'en', 'title' => 'Translated', 'content' => '<t>Translated body.</t>', 'created_at' => Carbon::now(), 'updated_at' => Carbon::now()],
+            ['step_id' => 2, 'locale' => 'en', 'title' => 'Title only', 'content' => null, 'created_at' => Carbon::now(), 'updated_at' => Carbon::now()],
         ]);
 
-        // Without that locale installed the forum falls back to what the admin
-        // originally wrote, which is the point of keeping it on the step.
         $steps = $this->availableTo(self::MEMBER)['welcome']['steps'];
 
-        $this->assertEquals('Welcome', $steps[0]['title']);
+        $this->assertEquals('Translated', $steps[0]['localizedTitle']);
+        $this->assertStringContainsString('Translated body.', $steps[0]['descriptionHtml']);
+        $this->assertEquals('Title only', $steps[1]['localizedTitle']);
+        $this->assertStringContainsString('Body of The header.', $steps[1]['descriptionHtml']);
     }
 
     #[Test]
     public function steps_come_back_in_the_order_they_run(): void
     {
-        // Positions deliberately against the ids, so anything ordering by id,
-        // or by nothing at all and taking what the database offers, fails.
         $this->database()->table('tour_guide_steps')->where('id', 1)->update(['position' => 2]);
         $this->database()->table('tour_guide_steps')->where('id', 2)->update(['position' => 0]);
         $this->database()->table('tour_guide_steps')->where('id', 3)->update(['position' => 1]);
 
-        $titles = array_column($this->availableTo(self::MEMBER)['welcome']['steps'], 'title');
+        $titles = array_column($this->availableTo(self::MEMBER)['welcome']['steps'], 'localizedTitle');
 
         $this->assertEquals(['The header', 'Home', 'Welcome'], $titles);
+    }
+
+    #[Test]
+    public function a_finished_tour_says_so(): void
+    {
+        $this->record(self::MEMBER, 'finished');
+
+        $this->assertTrue($this->availableTo(self::MEMBER)['welcome']['completed']);
+        $this->assertFalse($this->availableTo(self::ADMIN)['welcome']['completed']);
     }
 }

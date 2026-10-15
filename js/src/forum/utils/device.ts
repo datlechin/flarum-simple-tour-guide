@@ -1,17 +1,11 @@
-import type { Devices } from '../types';
+import app from 'flarum/forum/app';
 
-/**
- * Flarum's own tablet breakpoint. Below it the header collapses into the
- * drawer, which is what makes a desktop selector stop matching.
- */
-const PHONE_MAX_WIDTH = 767.98;
+import type { Devices } from '../../common/types';
 
-export function isMobile(): boolean {
-  return window.matchMedia(`(max-width: ${PHONE_MAX_WIDTH}px)`).matches;
+export function isPhone(): boolean {
+  return app.screen() === 'phone';
 }
 
 export function matchesDevice(devices: Devices): boolean {
-  if (devices === 'any') return true;
-
-  return devices === (isMobile() ? 'mobile' : 'desktop');
+  return devices === 'any' || devices === (isPhone() ? 'mobile' : 'desktop');
 }

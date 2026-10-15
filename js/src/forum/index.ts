@@ -14,7 +14,7 @@ export { default as TourGuide } from './components/TourGuide';
 export { default as TourSettings } from './components/TourSettings';
 export { default as ElementPicker } from './components/ElementPicker';
 export { default as generateSelector } from './utils/generateSelector';
-export * from './types';
+export * from '../common/types';
 
 app.initializers.add('datlechin/flarum-simple-tour-guide', () => {
   addResetTourGuideControl();

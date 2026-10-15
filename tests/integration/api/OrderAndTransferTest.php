@@ -14,36 +14,34 @@ namespace Datlechin\FlarumSimpleTourGuide\Tests\integration\api;
 use Datlechin\FlarumSimpleTourGuide\Tour;
 use Datlechin\FlarumSimpleTourGuide\TourStep;
 use PHPUnit\Framework\Attributes\Test;
+use Psr\Http\Message\ResponseInterface;
 
-/**
- * Reordering, and moving a tour between forums as a document.
- */
 class OrderAndTransferTest extends TourGuideTestCase
 {
     #[Test]
+    public function admin_may_reorder_tours(): void
+    {
+        $this->database()->table('tour_guide_tours')->insert($this->tour(['id' => 2, 'key' => 'other', 'position' => 1]));
+
+        $response = $this->order('/api/tour-guide-tours/order', [2, 1]);
+
+        $this->assertEquals(204, $response->getStatusCode(), (string) $response->getBody());
+        $this->assertEquals([2, 1], Tour::query()->orderBy('position')->pluck('id')->map(fn ($id) => (int) $id)->all());
+    }
+
+    #[Test]
     public function admin_may_reorder_steps(): void
     {
-        $response = $this->send($this->request('POST', '/api/tour-guide-tours/1/steps/order', [
-            'authenticatedAs' => self::ADMIN,
-            'json' => ['order' => [3, 2, 1]],
-        ]));
-
-        $this->assertEquals(204, $response->getStatusCode());
+        $this->assertEquals(204, $this->order('/api/tour-guide-tours/1/steps/order', [3, 2, 1])->getStatusCode());
         $this->assertEquals([3, 2, 1], $this->stepIdsInOrder());
     }
 
     #[Test]
     public function steps_left_out_of_the_order_are_numbered_after_it(): void
     {
-        $this->send($this->request('POST', '/api/tour-guide-tours/1/steps/order', [
-            'authenticatedAs' => self::ADMIN,
-            'json' => ['order' => [3]],
-        ]));
+        $this->order('/api/tour-guide-tours/1/steps/order', [3]);
 
-        // No two steps may share a position, or the order stops being an order.
-        $positions = TourStep::query()->where('tour_id', 1)->pluck('position')->all();
-
-        $this->assertCount(3, array_unique($positions));
+        $this->assertCount(3, array_unique(TourStep::query()->where('tour_id', 1)->pluck('position')->all()));
         $this->assertEquals(3, $this->stepIdsInOrder()[0]);
     }
 
@@ -53,10 +51,7 @@ class OrderAndTransferTest extends TourGuideTestCase
         $this->database()->table('tour_guide_tours')->insert($this->tour(['id' => 2, 'key' => 'other', 'position' => 1]));
         $this->database()->table('tour_guide_steps')->insert($this->step(9, 'Elsewhere', '#x', ['tour_id' => 2, 'position' => 7]));
 
-        $this->send($this->request('POST', '/api/tour-guide-tours/1/steps/order', [
-            'authenticatedAs' => self::ADMIN,
-            'json' => ['order' => [9]],
-        ]));
+        $this->order('/api/tour-guide-tours/1/steps/order', [9]);
 
         $this->assertEquals(7, TourStep::query()->find(9)->position);
     }
@@ -64,89 +59,85 @@ class OrderAndTransferTest extends TourGuideTestCase
     #[Test]
     public function a_non_numeric_id_is_rejected(): void
     {
-        $response = $this->send($this->request('POST', '/api/tour-guide-tours/1/steps/order', [
-            'authenticatedAs' => self::ADMIN,
-            'json' => ['order' => ['not-an-id']],
-        ]));
-
-        $this->assertEquals(422, $response->getStatusCode());
+        $this->assertEquals(422, $this->order('/api/tour-guide-tours/1/steps/order', ['not-an-id'])->getStatusCode());
     }
 
     #[Test]
     public function member_may_not_reorder(): void
     {
-        $steps = $this->send($this->request('POST', '/api/tour-guide-tours/1/steps/order', [
-            'authenticatedAs' => self::MEMBER,
-            'json' => ['order' => [3, 2, 1]],
-        ]));
-        $tours = $this->send($this->request('POST', '/api/tour-guide-tours/order', [
-            'authenticatedAs' => self::MEMBER,
-            'json' => ['order' => [1]],
-        ]));
-
-        $this->assertContains($steps->getStatusCode(), [401, 403]);
-        $this->assertContains($tours->getStatusCode(), [401, 403]);
+        $this->assertEquals(403, $this->order('/api/tour-guide-tours/1/steps/order', [3, 2, 1], self::MEMBER)->getStatusCode());
+        $this->assertEquals(403, $this->order('/api/tour-guide-tours/order', [1], self::MEMBER)->getStatusCode());
     }
 
     #[Test]
     public function a_tour_survives_a_round_trip(): void
     {
-        $document = $this->json($this->send($this->request('GET', '/api/tour-guide-tours/1/export', ['authenticatedAs' => self::ADMIN])));
+        $this->patchStep(1, ['translations' => ['vi' => ['title' => 'Xin chao', 'description' => 'Noi dung']]]);
+
+        $document = $this->export();
 
         $this->assertEquals(1, $document['version']);
         $this->assertCount(3, $document['steps']);
-        // Ids mean nothing on the forum it lands on.
+        $this->assertEquals('Body of Welcome.', $document['steps'][0]['description']);
+        $this->assertEquals('Xin chao', $document['steps'][0]['translations']['vi']['title']);
         $this->assertArrayNotHasKey('id', $document['tour']);
 
-        $response = $this->send($this->request('POST', '/api/tour-guide-tours/import', [
-            'authenticatedAs' => self::ADMIN,
-            'json' => $document,
-        ]));
+        $response = $this->import($document);
 
-        $this->assertEquals(201, $response->getStatusCode());
+        $this->assertEquals(201, $response->getStatusCode(), (string) $response->getBody());
 
-        $imported = Tour::query()->find($this->json($response)['id']);
+        $imported = Tour::query()->find($this->json($response)['data']['id']);
 
         $this->assertNotEquals('welcome', $imported->key);
-        $this->assertEquals(3, $imported->steps()->count());
         $this->assertFalse($imported->is_enabled);
+        $this->assertEquals(['Body of Welcome.', 'Body of The header.', 'Body of Home.'], $imported->steps->pluck('content')->all());
+        $this->assertEquals('Noi dung', $imported->steps[0]->translations[0]->content);
     }
 
     #[Test]
-    public function translations_travel_with_the_tour(): void
+    public function a_step_without_a_description_imports(): void
     {
-        $this->send($this->request('PATCH', '/api/tour-guide-steps/1', [
-            'authenticatedAs' => self::ADMIN,
-            'json' => ['data' => ['attributes' => ['translations' => ['vi' => ['title' => 'Xin chao', 'description' => 'Noi dung']]]]],
-        ]));
+        $response = $this->import(['version' => 1, 'tour' => ['title' => 'Bare'], 'steps' => [['title' => 'Empty', 'description' => '']]]);
 
-        $document = $this->json($this->send($this->request('GET', '/api/tour-guide-tours/1/export', ['authenticatedAs' => self::ADMIN])));
-
-        $this->assertEquals('Xin chao', $document['steps'][0]['translations']['vi']['title']);
+        $this->assertEquals(201, $response->getStatusCode(), (string) $response->getBody());
     }
 
     #[Test]
-    public function a_document_from_the_future_is_refused(): void
+    public function a_document_that_is_not_ours_is_refused(): void
     {
-        $response = $this->send($this->request('POST', '/api/tour-guide-tours/import', [
-            'authenticatedAs' => self::ADMIN,
-            'json' => ['version' => 99],
-        ]));
-
-        $this->assertEquals(422, $response->getStatusCode());
+        $this->assertEquals(422, $this->import(['version' => 99, 'tour' => [], 'steps' => []])->getStatusCode());
+        $this->assertEquals(422, $this->import(['version' => 1, 'steps' => 'nope'])->getStatusCode());
     }
 
     #[Test]
     public function member_may_not_export_or_import(): void
     {
         $export = $this->send($this->request('GET', '/api/tour-guide-tours/1/export', ['authenticatedAs' => self::MEMBER]));
-        $import = $this->send($this->request('POST', '/api/tour-guide-tours/import', [
-            'authenticatedAs' => self::MEMBER,
-            'json' => ['version' => 1, 'tour' => [], 'steps' => []],
-        ]));
 
-        $this->assertContains($export->getStatusCode(), [401, 403]);
-        $this->assertContains($import->getStatusCode(), [401, 403]);
+        $this->assertEquals(403, $export->getStatusCode());
+        $this->assertEquals(403, $this->import(['version' => 1, 'tour' => ['title' => 'x'], 'steps' => []], self::MEMBER)->getStatusCode());
+    }
+
+    protected function order(string $path, array $ids, int $actor = self::ADMIN): ResponseInterface
+    {
+        return $this->send($this->request('POST', $path, ['authenticatedAs' => $actor, 'json' => ['order' => $ids]]));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function export(): array
+    {
+        $response = $this->send($this->request('GET', '/api/tour-guide-tours/1/export', ['authenticatedAs' => self::ADMIN]));
+
+        $this->assertEquals(200, $response->getStatusCode(), (string) $response->getBody());
+
+        return $this->json($response)['meta'];
+    }
+
+    protected function import(array $document, int $actor = self::ADMIN): ResponseInterface
+    {
+        return $this->send($this->request('POST', '/api/tour-guide-tours/import', ['authenticatedAs' => $actor, 'json' => $document]));
     }
 
     /**
