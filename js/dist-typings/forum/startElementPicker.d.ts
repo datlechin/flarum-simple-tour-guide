@@ -1,4 +1,2 @@
-/**
- * Turn the forum into a selector picker when the admin area asks it to.
- */
+export declare function pickerActive(): boolean;
 export default function startElementPicker(): void;

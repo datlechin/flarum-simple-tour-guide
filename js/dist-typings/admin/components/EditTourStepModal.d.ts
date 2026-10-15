@@ -6,6 +6,7 @@ import type Mithril from 'mithril';
 import type Tour from '../../common/models/Tour';
 import type TourStep from '../../common/models/TourStep';
 import type { StepTranslations } from '../../common/models/TourStep';
+import type { PickedElement } from '../utils/openForum';
 export interface EditTourStepModalAttrs extends IFormModalAttrs {
     tour: Tour;
     step?: TourStep;
@@ -20,11 +21,9 @@ export default class EditTourStepModal<CustomAttrs extends EditTourStepModalAttr
     isEnabled: Stream<boolean>;
     clicksTarget: Stream<boolean>;
     advanceOnClick: Stream<boolean>;
-    /** Wording per locale, edited one language at a time. */
     translations: StepTranslations;
     locale: Stream<string>;
-    /** How many elements the target matched, the last time we asked the forum. */
-    matches: number | null;
+    picked: PickedElement | null;
     picking: boolean;
     oninit(vnode: Mithril.Vnode<CustomAttrs, this>): void;
     className(): string;
@@ -34,13 +33,9 @@ export default class EditTourStepModal<CustomAttrs extends EditTourStepModalAttr
     protected targetField(invalidTarget: boolean): Mithril.Children;
     protected translationsField(): Mithril.Children;
     protected setTranslation(locale: string, key: 'title' | 'description', value: string): void;
-    /**
-     * The target is typed or picked, so it is worth saying "that is not a
-     * selector" here rather than letting the tour quietly skip the step later.
-     */
     invalidTarget(): boolean;
-    protected pick(mode: 'pick' | 'test'): void;
+    protected pick(): void;
+    protected routeMismatch(): string | null;
     onsubmit(e: SubmitEvent): void;
     deleteStep(): void;
 }
-export declare function deviceOptions(): Record<string, string>;

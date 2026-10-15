@@ -23,7 +23,6 @@ export default class EditTourModal<CustomAttrs extends EditTourModalAttrs = Edit
     content(): JSX.Element;
     fields(): ItemList<Mithril.Children>;
     protected audienceField(): Mithril.Children;
-    protected toggleGroup(id: string): void;
     onsubmit(e: SubmitEvent): void;
     deleteTour(): void;
 }
