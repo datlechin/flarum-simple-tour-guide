@@ -9,14 +9,13 @@ export { default as EditTourModal } from './components/EditTourModal';
 export { default as EditTourStepModal } from './components/EditTourStepModal';
 export { default as TourStepList } from './components/TourStepList';
 export { default as TourStats } from './components/TourStats';
-export { default as pickElement } from './utils/pickElement';
+export { default as SortableList } from './components/SortableList';
 
 app.initializers.add('datlechin/flarum-simple-tour-guide', () => {
   app.registry
     .for('datlechin-simple-tour-guide')
     .registerPage(TourGuidePage)
-    // Registered as well as rendered by the page, so that admin search can
-    // find them by name.
+    // Registered as well as rendered by the page, so admin search finds them.
     .registerSetting(
       {
         setting: 'datlechin-simple-tour-guide.show_progress',

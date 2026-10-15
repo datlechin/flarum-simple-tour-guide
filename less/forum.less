@@ -5,27 +5,13 @@
   --tour-guide-arrow-size: 8px;
 }
 
-// Swallows everything aimed at the page underneath. The tour drives itself
-// with its own buttons, so nothing else needs to be reachable while it runs.
-//
-// The container is see-through to the pointer and the four panes inside it do
-// the covering, so a click-to-continue step can leave a real gap over the
-// element it is waiting for. Clicks on a pane still reach the container's
-// handler by bubbling.
+// Covers the hole too, on every step that is not waiting for a click on its element.
 .TourGuide-backdrop {
   position: fixed;
   inset: 0;
   z-index: var(--zindex-modal-background);
-  pointer-events: none;
 }
 
-.TourGuide-backdrop-pane {
-  position: absolute;
-  pointer-events: auto;
-}
-
-// A picture of a hole, and nothing else: pointer events belong to the backdrop
-// below it, which covers the same ground.
 .TourGuide-spotlight {
   position: fixed;
   inset: 0;
@@ -38,13 +24,13 @@
   path {
     fill: var(--overlay-bg);
     fill-rule: evenodd;
+    pointer-events: visiblePainted;
   }
 }
 
 .TourGuide-popover {
   position: fixed;
-  // Placed with a transform from these origins, in viewport coordinates, so
-  // the maths reads the same in either direction.
+  // Placed by a transform in viewport coordinates, the same in either reading direction.
   top: 0;
   left: 0;
   z-index: var(--zindex-modal);
@@ -59,8 +45,11 @@
   box-shadow: 0 7px 15px var(--shadow-color);
   animation: TourGuide-fade-in 150ms ease-out;
 
-  // On a phone there is no room to sit beside anything, so the popover becomes
-  // a sheet across the bottom of the screen and the arrow goes away.
+  // Focused only as the fallback when it has nothing focusable of its own.
+  &:focus {
+    outline: none;
+  }
+
   &[data-side="sheet"] {
     top: auto;
     bottom: 0;
@@ -104,7 +93,6 @@
     border-left-color: var(--body-bg);
   }
 
-  // A step with nothing to point at, and the phone sheet, have nowhere to point.
   .TourGuide-popover[data-side="center"] &,
   .TourGuide-popover[data-side="sheet"] & {
     display: none;
@@ -121,8 +109,7 @@
   font-weight: 600;
 }
 
-// Room for the close button, which floats over this corner, but only when the
-// forum offers one.
+// Room for the close button, which floats over this corner.
 .TourGuide-popover:has(.TourGuide-close) .TourGuide-content {
   padding-inline-end: 26px;
 }
@@ -135,7 +122,6 @@
   color: var(--heading-color);
 }
 
-// Formatted by the forum's own formatter, so it can hold anything a post can.
 .TourGuide-description {
   margin: 6px 0 0;
   font-size: 14px;
@@ -157,7 +143,6 @@
     color: var(--link-color);
   }
 
-  // A full-width image would push the popover past the side of the screen.
   img {
     max-width: 100%;
     height: auto;
@@ -206,8 +191,7 @@
   color: var(--muted-color);
 }
 
-// Says what to do, and must not read as another button: the whole point of
-// this step is that the reader presses the real thing instead.
+// Helper text, not another button: the reader presses the real element.
 .TourGuide-hint {
   display: flex;
   align-items: center;
@@ -266,9 +250,6 @@
 
 // ---------------------------------
 // THE ELEMENT PICKER
-//
-// Only ever on screen for an admin who opened the forum from the admin area to
-// point at something.
 
 .TourPicker-active {
   cursor: crosshair;

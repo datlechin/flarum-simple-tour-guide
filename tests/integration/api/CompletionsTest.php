@@ -14,19 +14,15 @@ namespace Datlechin\FlarumSimpleTourGuide\Tests\integration\api;
 use Datlechin\FlarumSimpleTourGuide\TourCompletion;
 use PHPUnit\Framework\Attributes\Test;
 
-/**
- * Recording who has been through a tour, resetting it, and what that adds up
- * to on the admin's figures.
- */
 class CompletionsTest extends TourGuideTestCase
 {
     #[Test]
     public function member_records_their_own(): void
     {
-        $response = $this->record(self::MEMBER, 'finished');
+        $response = $this->record(self::MEMBER, 'dismissed', 2);
 
-        $this->assertEquals(204, $response->getStatusCode());
-        $this->assertTrue($this->availableTo(self::MEMBER)['welcome']['completed']);
+        $this->assertEquals(201, $response->getStatusCode(), (string) $response->getBody());
+        $this->assertEquals(2, TourCompletion::query()->where('user_id', self::MEMBER)->value('last_step_id'));
     }
 
     #[Test]
@@ -36,40 +32,45 @@ class CompletionsTest extends TourGuideTestCase
     }
 
     #[Test]
-    public function an_unknown_tour_is_rejected(): void
+    public function a_tour_the_member_is_not_offered_is_rejected(): void
     {
-        $response = $this->send($this->request('POST', '/api/tour-guide/completions', [
-            'authenticatedAs' => self::MEMBER,
-            'json' => ['tourKey' => 'no-such-tour', 'outcome' => 'finished'],
-        ]));
+        $this->database()->table('tour_guide_tours')->where('id', 1)->update(['is_enabled' => 0]);
 
-        $this->assertEquals(404, $response->getStatusCode());
+        $this->assertGreaterThanOrEqual(400, $this->record(self::MEMBER, 'finished')->getStatusCode());
+        $this->assertEquals(0, TourCompletion::query()->count());
     }
 
     #[Test]
-    public function a_step_from_another_tour_is_not_recorded(): void
+    public function a_step_from_another_tour_is_rejected(): void
     {
         $this->database()->table('tour_guide_tours')->insert($this->tour(['id' => 2, 'key' => 'other', 'position' => 1]));
         $this->database()->table('tour_guide_steps')->insert($this->step(9, 'Elsewhere', '#x', ['tour_id' => 2]));
 
-        $this->record(self::MEMBER, 'dismissed', 9);
-
-        // Trusting it would put a drop-off on a step this tour never had.
-        $this->assertNull(TourCompletion::query()->where('user_id', self::MEMBER)->value('last_step_id'));
+        $this->assertEquals(422, $this->record(self::MEMBER, 'dismissed', 9)->getStatusCode());
+        $this->assertEquals(0, TourCompletion::query()->count());
     }
 
     #[Test]
     public function guest_records_nothing(): void
     {
-        $response = $this->send($this->request('POST', '/api/tour-guide/completions', [
-            'json' => ['tourKey' => 'welcome', 'outcome' => 'finished'],
+        $response = $this->send($this->request('POST', '/api/tour-guide-completions', [
+            'json' => ['data' => ['type' => 'tour-guide-completions', 'attributes' => ['outcome' => 'finished']]],
         ]));
 
-        // A guest POST is turned away by CSRF before it ever reaches the
-        // controller, so the status says 400 rather than 401. Either way the
-        // guarantee worth asserting is that nothing was written.
         $this->assertGreaterThanOrEqual(400, $response->getStatusCode());
         $this->assertEquals(0, TourCompletion::query()->count());
+    }
+
+    #[Test]
+    public function taking_it_again_replaces_the_record(): void
+    {
+        $this->record(self::MEMBER, 'dismissed', 1);
+        $response = $this->record(self::MEMBER, 'finished');
+
+        $this->assertEquals(201, $response->getStatusCode());
+        $this->assertEquals(1, TourCompletion::query()->where('user_id', self::MEMBER)->count());
+        $this->assertEquals('finished', TourCompletion::query()->where('user_id', self::MEMBER)->value('outcome'));
+        $this->assertNull(TourCompletion::query()->where('user_id', self::MEMBER)->value('last_step_id'));
     }
 
     #[Test]
@@ -77,13 +78,10 @@ class CompletionsTest extends TourGuideTestCase
     {
         $this->record(self::MEMBER, 'finished');
 
-        $response = $this->send($this->request('POST', '/api/tour-guide/completions/reset', [
-            'authenticatedAs' => self::MEMBER,
-            'json' => ['userId' => self::MEMBER],
-        ]));
+        $response = $this->send($this->request('DELETE', '/api/users/'.self::MEMBER.'/tour-guide-completions', ['authenticatedAs' => self::MEMBER]));
 
         $this->assertEquals(204, $response->getStatusCode());
-        $this->assertEquals(0, TourCompletion::query()->where('user_id', self::MEMBER)->count());
+        $this->assertEquals(0, TourCompletion::query()->count());
     }
 
     #[Test]
@@ -91,13 +89,10 @@ class CompletionsTest extends TourGuideTestCase
     {
         $this->record(self::ADMIN, 'finished');
 
-        $response = $this->send($this->request('POST', '/api/tour-guide/completions/reset', [
-            'authenticatedAs' => self::MEMBER,
-            'json' => ['userId' => self::ADMIN],
-        ]));
+        $response = $this->send($this->request('DELETE', '/api/users/'.self::ADMIN.'/tour-guide-completions', ['authenticatedAs' => self::MEMBER]));
 
-        $this->assertContains($response->getStatusCode(), [401, 403]);
-        $this->assertEquals(1, TourCompletion::query()->where('user_id', self::ADMIN)->count());
+        $this->assertEquals(403, $response->getStatusCode());
+        $this->assertEquals(1, TourCompletion::query()->count());
     }
 
     #[Test]
@@ -105,39 +100,33 @@ class CompletionsTest extends TourGuideTestCase
     {
         $this->record(self::MEMBER, 'finished');
 
-        $response = $this->send($this->request('POST', '/api/tour-guide/completions/reset', [
-            'authenticatedAs' => self::ADMIN,
-            'json' => ['userId' => self::MEMBER],
-        ]));
+        $response = $this->send($this->request('DELETE', '/api/users/'.self::MEMBER.'/tour-guide-completions', ['authenticatedAs' => self::ADMIN]));
 
         $this->assertEquals(204, $response->getStatusCode());
-        $this->assertEquals(0, TourCompletion::query()->where('user_id', self::MEMBER)->count());
+        $this->assertEquals(0, TourCompletion::query()->count());
     }
 
     #[Test]
     public function stats_count_outcomes_and_pin_the_drop_off(): void
     {
         $this->record(self::MEMBER, 'dismissed', 2);
-        $this->record(self::ADMIN, 'finished');
+        $this->record(self::ADMIN, 'finished', 3);
 
-        $stats = $this->json($this->send($this->request('GET', '/api/tour-guide-tours/1/stats', ['authenticatedAs' => self::ADMIN])));
+        $stats = $this->stats();
 
         $this->assertEquals(1, $stats['finished']);
         $this->assertEquals(1, $stats['dismissed']);
         $this->assertEquals(2, $stats['total']);
-        $this->assertEquals(1, collect($stats['steps'])->firstWhere('id', 2)['abandoned']);
+        $this->assertEquals([0, 1, 0], array_column($stats['steps'], 'abandoned'));
     }
 
     #[Test]
-    public function finishing_is_not_counted_as_a_drop_off(): void
+    public function stats_of_an_untaken_tour_are_empty(): void
     {
-        // Counting the last step of everybody who finished would put a spike on
-        // the final step and call it the place people give up.
-        $this->record(self::MEMBER, 'finished', 3);
+        $stats = $this->stats();
 
-        $stats = $this->json($this->send($this->request('GET', '/api/tour-guide-tours/1/stats', ['authenticatedAs' => self::ADMIN])));
-
-        $this->assertEquals(0, collect($stats['steps'])->sum('abandoned'));
+        $this->assertEquals(0, $stats['total']);
+        $this->assertCount(3, $stats['steps']);
     }
 
     #[Test]
@@ -145,24 +134,18 @@ class CompletionsTest extends TourGuideTestCase
     {
         $response = $this->send($this->request('GET', '/api/tour-guide-tours/1/stats', ['authenticatedAs' => self::MEMBER]));
 
-        $this->assertContains($response->getStatusCode(), [401, 403]);
+        $this->assertEquals(403, $response->getStatusCode());
     }
 
-    #[Test]
-    public function taking_it_twice_leaves_one_record(): void
+    /**
+     * @return array<string, mixed>
+     */
+    protected function stats(): array
     {
-        $this->record(self::MEMBER, 'dismissed', 1);
-        $this->record(self::MEMBER, 'finished');
+        $response = $this->send($this->request('GET', '/api/tour-guide-tours/1/stats', ['authenticatedAs' => self::ADMIN]));
 
-        $this->assertEquals(1, TourCompletion::query()->where('user_id', self::MEMBER)->count());
-        $this->assertEquals('finished', TourCompletion::query()->where('user_id', self::MEMBER)->value('outcome'));
-    }
+        $this->assertEquals(200, $response->getStatusCode(), (string) $response->getBody());
 
-    protected function record(int $userId, string $outcome, ?int $lastStepId = null)
-    {
-        return $this->send($this->request('POST', '/api/tour-guide/completions', [
-            'authenticatedAs' => $userId,
-            'json' => ['tourKey' => 'welcome', 'outcome' => $outcome, 'lastStepId' => $lastStepId],
-        ]));
+        return $this->json($response)['meta'];
     }
 }

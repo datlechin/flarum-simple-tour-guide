@@ -3,36 +3,37 @@ import Component from 'flarum/common/Component';
 import type { ComponentAttrs } from 'flarum/common/Component';
 import Button from 'flarum/common/components/Button';
 import Icon from 'flarum/common/components/Icon';
+import extractText from 'flarum/common/utils/extractText';
+import type PageState from 'flarum/common/states/PageState';
 import type Mithril from 'mithril';
 
 import generateSelector, { matchCount } from '../utils/generateSelector';
+import { goToRoute } from '../utils/route';
+import type { RouteAccess } from '../utils/route';
 
 export interface ElementPickerAttrs extends ComponentAttrs {
-  /** 'pick' captures an element, 'test' just shows what a selector matches. */
   mode: 'pick' | 'test';
-  /** The selector to show matches for, in 'test' mode. */
-  selector?: string | null;
+  selector: string | null;
+  route: string | null;
 }
 
-/**
- * Point-and-click selector capture, opened by the admin area in a second
- * window.
- *
- * Typing a CSS selector by hand is the worst part of writing a tour: you have
- * to know the markup, and you find out you got it wrong later, silently, when
- * a step fails to appear.
- */
 export default class ElementPicker<CustomAttrs extends ElementPickerAttrs = ElementPickerAttrs> extends Component<CustomAttrs> {
+  private access: RouteAccess = 'here';
   private hovered: Element | null = null;
   private selector: string | null = null;
   private matches = 0;
+  private outlineElement: HTMLElement | null = null;
+  private testedOn: PageState | null = null;
 
-  /**
-   * While paused the forum behaves normally, so the admin can navigate to the
-   * page their step is about. Without it the picker could only ever capture
-   * something on whichever page it opened on, since it swallows every click.
-   */
+  // While paused the forum behaves normally, so the admin can browse to the step's page.
   private paused = false;
+
+  oninit(vnode: Mithril.Vnode<CustomAttrs, this>) {
+    super.oninit(vnode);
+
+    this.access = goToRoute(this.attrs.route);
+    this.paused = this.access === 'param';
+  }
 
   view(): Mithril.Children {
     const testing = this.attrs.mode === 'test';
@@ -45,7 +46,7 @@ export default class ElementPicker<CustomAttrs extends ElementPickerAttrs = Elem
           <Icon name={testing ? 'fas fa-eye' : 'fas fa-crosshairs'} className="TourPicker-bar-icon" />
 
           <div className="TourPicker-bar-body">
-            <div className="TourPicker-bar-title">{this.label()}</div>
+            <div className="TourPicker-bar-title">{this.notice() ?? this.label()}</div>
             <code className="TourPicker-bar-selector">
               {this.selector ?? app.translator.trans('datlechin-simple-tour-guide.forum.picker.nothing_yet')}
             </code>
@@ -57,13 +58,13 @@ export default class ElementPicker<CustomAttrs extends ElementPickerAttrs = Elem
             </span>
           )}
 
-          {!testing && (
-            <Button className="Button Button--link" icon={this.paused ? 'fas fa-crosshairs' : 'fas fa-hand'} onclick={() => this.togglePause()}>
-              {this.paused
-                ? app.translator.trans('datlechin-simple-tour-guide.forum.picker.resume')
-                : app.translator.trans('datlechin-simple-tour-guide.forum.picker.browse')}
-            </Button>
-          )}
+          <Button className="Button Button--link" icon={this.paused ? 'fas fa-crosshairs' : 'fas fa-hand'} onclick={() => this.togglePause()}>
+            {!this.paused
+              ? app.translator.trans('datlechin-simple-tour-guide.forum.picker.browse')
+              : testing
+              ? app.translator.trans('datlechin-simple-tour-guide.forum.picker.show')
+              : app.translator.trans('datlechin-simple-tour-guide.forum.picker.resume')}
+          </Button>
 
           <Button className="Button Button--link" onclick={() => window.close()}>
             {app.translator.trans('datlechin-simple-tour-guide.forum.picker.cancel')}
@@ -76,21 +77,21 @@ export default class ElementPicker<CustomAttrs extends ElementPickerAttrs = Elem
   oncreate(vnode: Mithril.VnodeDOM<CustomAttrs, this>): void {
     super.oncreate(vnode);
 
+    this.outlineElement = this.element.querySelector('.TourPicker-outline');
+
     document.body.classList.add('TourPicker-active');
-
-    if (this.attrs.mode === 'test') {
-      this.selector = this.attrs.selector ?? null;
-      this.matches = this.selector ? matchCount(this.selector) : 0;
-
-      // Nothing to hunt for, so show what the selector already picks out.
-      requestAnimationFrame(() => this.outlineFirstMatch());
-
-      return;
-    }
-
     document.addEventListener('mousemove', this.onmousemove, true);
     document.addEventListener('click', this.onclick, true);
     document.addEventListener('keydown', this.onkeydown, true);
+
+    if (this.attrs.mode === 'test' && !this.paused) this.showSelector();
+  }
+
+  // Leading to the tour's page is asynchronous, so a test runs again once that page has rendered.
+  onupdate(vnode: Mithril.VnodeDOM<CustomAttrs, this>): void {
+    super.onupdate(vnode);
+
+    if (this.attrs.mode === 'test' && !this.paused && this.testedOn !== app.current) this.showSelector();
   }
 
   onremove(vnode: Mithril.VnodeDOM<CustomAttrs, this>): void {
@@ -103,34 +104,54 @@ export default class ElementPicker<CustomAttrs extends ElementPickerAttrs = Elem
   }
 
   protected label(): string {
-    const key = this.attrs.mode === 'test' ? 'testing' : 'picking';
+    return extractText(
+      this.attrs.mode === 'test'
+        ? app.translator.trans('datlechin-simple-tour-guide.forum.picker.testing')
+        : app.translator.trans('datlechin-simple-tour-guide.forum.picker.picking')
+    );
+  }
 
-    return String(app.translator.trans(`datlechin-simple-tour-guide.forum.picker.${key}`, {}, true));
+  protected notice(): Mithril.Children {
+    const route = this.attrs.route;
+
+    if (this.access === 'param' && this.paused) return app.translator.trans('datlechin-simple-tour-guide.forum.picker.go_to_page', { route });
+    if (this.access === 'unknown') return app.translator.trans('datlechin-simple-tour-guide.forum.unknown_page', { route });
+
+    return null;
   }
 
   protected togglePause(): void {
     this.paused = !this.paused;
+    this.hovered = null;
 
     if (this.paused) {
       this.hideOutline();
-      this.hovered = null;
+    } else if (this.attrs.mode === 'test') {
+      this.showSelector();
     }
   }
 
-  private onmousemove = (event: MouseEvent): void => {
-    if (this.paused) return;
+  protected showSelector(): void {
+    this.testedOn = app.current;
+    this.select(this.attrs.selector);
 
+    const found = this.selector ? document.querySelector(this.selector) : null;
+
+    if (found) {
+      found.scrollIntoView({ block: 'center' });
+      this.outline(found.getBoundingClientRect());
+    }
+
+    m.redraw();
+  }
+
+  private onmousemove = (event: MouseEvent): void => {
     const target = event.target as Element | null;
 
-    // The picker's own chrome is not part of the forum being pointed at.
-    if (!target || target.closest('.TourPicker')) return;
-
-    if (target === this.hovered) return;
+    if (this.paused || this.attrs.mode === 'test' || !target || target.closest('.TourPicker') || target === this.hovered) return;
 
     this.hovered = target;
-    this.selector = generateSelector(target);
-    this.matches = this.selector ? matchCount(this.selector) : 0;
-
+    this.select(generateSelector(target));
     this.outline(target.getBoundingClientRect());
 
     m.redraw();
@@ -139,17 +160,19 @@ export default class ElementPicker<CustomAttrs extends ElementPickerAttrs = Elem
   private onclick = (event: MouseEvent): void => {
     const target = event.target as Element | null;
 
-    if (this.paused || target?.closest('.TourPicker')) return;
+    if (this.paused || !target || target.closest('.TourPicker')) return;
 
-    // The forum underneath is live: without this, picking the search box opens
-    // the search, and picking a link navigates away from the page being picked.
+    // The forum underneath is live: picking a link would follow it, picking the search box would open it.
     event.preventDefault();
     event.stopPropagation();
 
-    if (!this.selector) return;
+    if (this.attrs.mode === 'test') return;
 
-    window.opener?.postMessage({ source: 'datlechin-simple-tour-guide', selector: this.selector, matches: this.matches }, window.location.origin);
+    const selector = generateSelector(target);
 
+    if (!selector) return;
+
+    window.opener?.postMessage({ selector, route: app.current.get('routeName') ?? null }, window.location.origin);
     window.close();
   };
 
@@ -157,29 +180,17 @@ export default class ElementPicker<CustomAttrs extends ElementPickerAttrs = Elem
     if (event.key === 'Escape') window.close();
   };
 
-  private outlineFirstMatch(): void {
-    if (!this.selector) return;
-
-    const found = document.querySelector(this.selector);
-
-    if (found) {
-      found.scrollIntoView({ block: 'center', behavior: 'smooth' });
-      this.outline(found.getBoundingClientRect());
-    }
-
-    m.redraw();
+  private select(selector: string | null): void {
+    this.selector = selector;
+    this.matches = matchCount(selector ?? '');
   }
 
   private hideOutline(): void {
-    const outline = this.element?.querySelector<HTMLElement>('.TourPicker-outline');
-
-    if (outline) outline.style.opacity = '0';
-
-    m.redraw();
+    if (this.outlineElement) this.outlineElement.style.opacity = '0';
   }
 
   private outline(rect: DOMRect): void {
-    const outline = this.element?.querySelector<HTMLElement>('.TourPicker-outline');
+    const outline = this.outlineElement;
 
     if (!outline) return;
 

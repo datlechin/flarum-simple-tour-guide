@@ -11,19 +11,19 @@
 
 namespace Datlechin\FlarumSimpleTourGuide;
 
-use Carbon\Carbon;
 use Flarum\Database\AbstractModel;
-use Illuminate\Database\Eloquent\Builder;
+use Flarum\Formatter\Formattable;
+use Flarum\Formatter\HasFormattedContent;
+use Flarum\User\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * One stop on a tour: a title and a body, optionally anchored to an element.
- *
  * @property int $id
  * @property int $tour_id
  * @property string $title
- * @property string $description
+ * @property string|null $content
  * @property string|null $target
  * @property string $placement
  * @property string $devices
@@ -31,34 +31,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property bool $clicks_target
  * @property bool $advance_on_click
  * @property int $position
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
- * @property-read Tour $tour
- * @property-read \Illuminate\Database\Eloquent\Collection<int, TourStepTranslation> $translations
- *
- * @method static Builder<static> query()
+ * @property-read Collection<int, TourStepTranslation> $translations
  */
-class TourStep extends AbstractModel
+class TourStep extends AbstractModel implements Formattable
 {
+    use HasFormattedContent;
+    use Orderable;
+
     public const PLACEMENT_AUTO = 'auto';
 
     protected $table = 'tour_guide_steps';
 
-    /**
-     * The table has carried these columns since it was created, but the base
-     * model leaves timestamps off, so until now nothing ever wrote them.
-     */
     public $timestamps = true;
-
-    /** Mirrors the column defaults; see the note on Tour. */
-    protected $attributes = [
-        'placement' => self::PLACEMENT_AUTO,
-        'devices' => 'any',
-        'is_enabled' => true,
-        'clicks_target' => false,
-        'advance_on_click' => false,
-        'position' => 0,
-    ];
 
     protected $casts = [
         'tour_id' => 'int',
@@ -84,26 +68,34 @@ class TourStep extends AbstractModel
         return $this->hasMany(TourStepTranslation::class, 'step_id');
     }
 
-    /**
-     * The wording to show somebody reading in `$locale`.
-     *
-     * Falls back to the step's own title and description, which is what the
-     * admin typed when they wrote the step, so an untranslated step still
-     * reads rather than coming out blank.
-     *
-     * @return array{title: string, description: string}
-     */
-    public function contentFor(string $locale): array
+    public function translationFor(string $locale): ?TourStepTranslation
     {
-        $translation = $this->translations->first(fn (TourStepTranslation $t) => $t->locale === $locale)
-            // A member reading pt-BR should get a pt translation before falling
-            // all the way back to the original.
-            ?? $this->translations->first(fn (TourStepTranslation $t) => str_starts_with($locale, $t->locale.'-'));
+        return $this->translations->firstWhere('locale', $locale)
+            // pt-BR falls back to pt before the untranslated original.
+            ?? $this->translations->first(fn (TourStepTranslation $translation) => str_starts_with($locale, $translation->locale.'-'));
+    }
 
-        return [
-            'title' => $translation->title ?? $this->title,
-            'description' => $translation->description ?? $this->description,
-        ];
+    /**
+     * @return array<string, array{title: string, description: string}>
+     */
+    public function translationMap(): array
+    {
+        return $this->translations
+            ->sortBy('locale')
+            ->mapWithKeys(fn (TourStepTranslation $translation) => [
+                $translation->locale => ['title' => $translation->title, 'description' => $translation->content ?? ''],
+            ])
+            ->all();
+    }
+
+    public function saveTranslation(string $locale, string $title, string $description, ?User $actor = null): void
+    {
+        $translation = $this->translations->firstWhere('locale', $locale) ?? new TourStepTranslation();
+        $translation->step_id = $this->id;
+        $translation->locale = $locale;
+        $translation->title = $title;
+        $translation->setContentAttribute($description, $actor);
+        $translation->save();
     }
 
     public static function placements(): array

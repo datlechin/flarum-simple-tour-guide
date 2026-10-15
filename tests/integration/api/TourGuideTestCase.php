@@ -12,16 +12,11 @@
 namespace Datlechin\FlarumSimpleTourGuide\Tests\integration\api;
 
 use Carbon\Carbon;
-use Flarum\Group\Group;
 use Flarum\Testing\integration\RetrievesAuthorizedUsers;
 use Flarum\Testing\integration\TestCase;
 use Flarum\User\User;
 use Psr\Http\Message\ResponseInterface;
 
-/**
- * The forum every tour guide test starts from: an admin, a member, one tour on
- * the index and three steps in it.
- */
 abstract class TourGuideTestCase extends TestCase
 {
     use RetrievesAuthorizedUsers;
@@ -37,8 +32,6 @@ abstract class TourGuideTestCase extends TestCase
 
         $this->prepareDatabase([
             User::class => [
-                // A real account always has one, and an age-limited tour has
-                // to decide something about an account that does not.
                 array_merge($this->normalUser(), ['joined_at' => Carbon::now()]),
             ],
             'tour_guide_tours' => [
@@ -62,7 +55,6 @@ abstract class TourGuideTestCase extends TestCase
             'start_mode' => 'auto',
             'route' => 'index',
             'devices' => 'any',
-            'group_ids' => null,
             'max_account_age_days' => null,
             'position' => 0,
             'created_at' => Carbon::now(),
@@ -76,7 +68,7 @@ abstract class TourGuideTestCase extends TestCase
             'id' => $id,
             'tour_id' => 1,
             'title' => $title,
-            'description' => "Body of $title.",
+            'content' => "<t>Body of $title.</t>",
             'target' => $target,
             'placement' => 'auto',
             'devices' => 'any',
@@ -95,42 +87,61 @@ abstract class TourGuideTestCase extends TestCase
     }
 
     /**
-     * The tours the forum would offer this member, keyed so a test can name the
-     * one it means.
-     *
      * @return array<string, array<string, mixed>>
      */
-    protected function availableTo(?int $userId, array $query = []): array
+    protected function availableTo(int $userId): array
+    {
+        return $this->tours($userId, ['filter' => ['available' => '1']]);
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    protected function tours(int $userId, array $query = []): array
     {
         $response = $this->send(
-            $this->request('GET', '/api/tour-guide/available', $userId ? ['authenticatedAs' => $userId] : [])
-                ->withQueryParams($query)
+            $this->request('GET', '/api/tour-guide-tours', ['authenticatedAs' => $userId])
+                ->withQueryParams($query + ['include' => 'enabledSteps,completion'])
         );
 
-        $this->assertEquals(200, $response->getStatusCode(), 'available tours should be readable');
+        $this->assertEquals(200, $response->getStatusCode(), (string) $response->getBody());
 
-        return collect($this->json($response)['tours'] ?? [])->keyBy('key')->all();
+        $document = $this->json($response);
+        $included = collect($document['included'] ?? [])->keyBy(fn (array $resource) => $resource['type'].':'.$resource['id']);
+
+        return collect($document['data'])
+            ->mapWithKeys(fn (array $tour) => [$tour['attributes']['key'] => $tour['attributes'] + [
+                'steps' => collect($tour['relationships']['enabledSteps']['data'] ?? [])
+                    ->map(fn (array $link) => $included[$link['type'].':'.$link['id']]['attributes'])
+                    ->all(),
+                'completed' => ! empty($tour['relationships']['completion']['data']),
+                'relationships' => array_keys($tour['relationships'] ?? []),
+            ]])
+            ->all();
     }
 
-    protected function memberOfNoGroups(): array
+    protected function record(int $userId, string $outcome, ?int $lastStepId = null, int $tourId = 1): ResponseInterface
     {
-        return [
-            'id' => 3,
-            'username' => 'grouplessuser',
-            'email' => 'groupless@machine.local',
-            'is_email_confirmed' => 1,
-            'password' => '$2y$10$LO59tiT7uggl6Oe23o/O6.utnF6ipngYjvMvaxo1TciKqBttDNKim',
-            'joined_at' => Carbon::now(),
-        ];
+        return $this->send($this->request('POST', '/api/tour-guide-completions', [
+            'authenticatedAs' => $userId,
+            'json' => [
+                'data' => [
+                    'type' => 'tour-guide-completions',
+                    'attributes' => ['outcome' => $outcome],
+                    'relationships' => [
+                        'tour' => ['data' => ['type' => 'tour-guide-tours', 'id' => (string) $tourId]],
+                        'lastStep' => ['data' => $lastStepId ? ['type' => 'tour-guide-steps', 'id' => (string) $lastStepId] : null],
+                    ],
+                ],
+            ],
+        ]));
     }
 
-    protected function groupAssignment(int $userId, string $groupId): array
+    protected function patchStep(int $id, array $attributes): ResponseInterface
     {
-        return ['user_id' => $userId, 'group_id' => $groupId];
-    }
-
-    protected function membersGroupId(): string
-    {
-        return Group::MEMBER_ID;
+        return $this->send($this->request('PATCH', "/api/tour-guide-steps/$id", [
+            'authenticatedAs' => self::ADMIN,
+            'json' => ['data' => ['type' => 'tour-guide-steps', 'id' => (string) $id, 'attributes' => $attributes]],
+        ]));
     }
 }

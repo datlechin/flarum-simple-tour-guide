@@ -1,70 +1,58 @@
 import app from 'flarum/forum/app';
 
-import type { TourData, TourOutcome } from './types';
+import type Tour from '../common/models/Tour';
+import type TourCompletion from '../common/models/TourCompletion';
+import type TourStep from '../common/models/TourStep';
+import type { TourOutcome } from '../common/types';
 
-let cached: Promise<TourData[]> | null = null;
+let cached: Promise<Tour[]> | null = null;
 
-/**
- * The tours this member could be shown.
- *
- * Cached for the life of the page: the answer only changes when they finish
- * one, and that goes through `recordCompletion` here, which refreshes it.
- */
-export default function loadTours(): Promise<TourData[]> {
-  return (cached ??= fetchTours());
+// Ended during this visit, so a tour is not offered again before its completion is saved.
+let ended = new Set<Tour>();
+
+function fetchTours(filter: Record<string, string>): Promise<Tour[]> {
+  return app.store
+    .find<Tour[]>('tour-guide-tours', { filter, include: 'enabledSteps,completion' }, undefined, { errorHandler: () => {} })
+    .then((tours) => [...tours]);
 }
 
-/**
- * Load one tour for an admin to look at, whether or not it is enabled and
- * whether or not they have already been through it. Never cached, and never
- * recorded.
- */
-export function loadPreview(key: string): Promise<TourData[]> {
-  return fetchTours(key);
+export default function loadTours(): Promise<Tour[]> {
+  return (cached ??= fetchTours({ available: '1' }).catch(() => {
+    cached = null;
+
+    return [];
+  }));
+}
+
+// Disabled tours and tours meant for others included: an admin previewing their own work.
+export function loadPreview(): Promise<Tour[]> {
+  return fetchTours({}).catch(() => []);
 }
 
 export function forgetTours(): void {
   cached = null;
+  ended = new Set();
 }
 
-function fetchTours(preview?: string): Promise<TourData[]> {
-  return app
-    .request<{ tours: TourData[] }>({
-      method: 'GET',
-      url: `${app.forum.attribute('apiUrl')}/tour-guide/available`,
-      params: preview ? { preview } : {},
-    })
-    .then((response) => response.tours ?? [])
-    .catch(() => []);
+export function endedThisVisit(tour: Tour): boolean {
+  return ended.has(tour);
 }
 
-export function recordCompletion(tour: TourData, outcome: TourOutcome, lastStepId: number | null): void {
-  // Previewing is an admin reading their own draft. Recording it would mark
-  // the tour taken for them and quietly stop it running again.
-  if (tour.preview) return;
+export function recordCompletion(tour: Tour, outcome: TourOutcome, lastStep: TourStep | null): void {
+  ended.add(tour);
 
-  // Marked here and now, because the member may navigate before the request
-  // lands and the answer to "have they taken this?" has to be yes immediately.
-  tour.completed = true;
-
-  app
-    .request({
-      method: 'POST',
-      url: `${app.forum.attribute('apiUrl')}/tour-guide/completions`,
-      body: { tourKey: tour.key, outcome, lastStepId },
-      // There is nothing the reader can do about this failing, and nothing
-      // they lose by it: the tour simply offers itself again next visit.
-      errorHandler: () => {},
-    })
-    .then(forgetTours, () => {});
+  app.store
+    .createRecord<TourCompletion>('tour-guide-completions')
+    .save({ outcome, relationships: { tour, lastStep } }, { errorHandler: () => {} })
+    .then((completion) => tour.pushData({ relationships: { completion } }))
+    .catch(() => {});
 }
 
-export function resetTours(userId: string, tourKey?: string): Promise<unknown> {
+export function resetTours(userId: string): Promise<unknown> {
   forgetTours();
 
   return app.request({
-    method: 'POST',
-    url: `${app.forum.attribute('apiUrl')}/tour-guide/completions/reset`,
-    body: tourKey ? { userId, tourKey } : { userId },
+    method: 'DELETE',
+    url: `${app.forum.attribute('apiUrl')}/users/${userId}/tour-guide-completions`,
   });
 }

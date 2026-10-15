@@ -3,25 +3,24 @@ import Button from 'flarum/common/components/Button';
 import Form from 'flarum/common/components/Form';
 import FormModal from 'flarum/common/components/FormModal';
 import type { IFormModalAttrs } from 'flarum/common/components/FormModal';
+import MultiSelect from 'flarum/common/components/MultiSelect';
 import Select from 'flarum/common/components/Select';
 import Switch from 'flarum/common/components/Switch';
 import Group from 'flarum/common/models/Group';
 import ItemList from 'flarum/common/utils/ItemList';
 import Stream from 'flarum/common/utils/Stream';
 import extractText from 'flarum/common/utils/extractText';
+import sortGroups from 'flarum/common/utils/sortGroups';
 import type Mithril from 'mithril';
 
 import type Tour from '../../common/models/Tour';
-import { deviceOptions } from './EditTourStepModal';
+import deviceOptions from '../utils/deviceOptions';
 
 export interface EditTourModalAttrs extends IFormModalAttrs {
   tour?: Tour;
 }
 
-/**
- * Flarum's own routes. An admin can type anything, because extensions add
- * their own, but these are the ones worth offering.
- */
+// Suggestions only: extensions add routes of their own, and the admin app cannot list the forum's.
 const CORE_ROUTES = ['index', 'discussion', 'user', 'settings', 'notifications', 'posts'];
 
 export default class EditTourModal<CustomAttrs extends EditTourModalAttrs = EditTourModalAttrs> extends FormModal<CustomAttrs> {
@@ -47,7 +46,7 @@ export default class EditTourModal<CustomAttrs extends EditTourModalAttrs = Edit
     this.startMode = Stream(this.tour.startMode() || 'auto');
     this.route = Stream(this.tour.route() || '');
     this.devices = Stream(this.tour.devices() || 'any');
-    this.groupIds = Stream((this.tour.groupIds() ?? []).map(String));
+    this.groupIds = Stream((this.tour.groups() || []).map((group) => group!.id()!));
     this.maxAccountAgeDays = Stream(this.tour.maxAccountAgeDays()?.toString() ?? '');
   }
 
@@ -116,6 +115,7 @@ export default class EditTourModal<CustomAttrs extends EditTourModalAttrs = Edit
         <label>{app.translator.trans('datlechin-simple-tour-guide.admin.tour_modal.route_label')}</label>
         <input
           className="FormControl"
+          name="route"
           list="tour-guide-routes"
           disabled={this.loading}
           bidi={this.route}
@@ -173,40 +173,34 @@ export default class EditTourModal<CustomAttrs extends EditTourModalAttrs = Edit
   }
 
   protected audienceField(): Mithril.Children {
-    const groups = app.store.all<Group>('groups').filter((group) => group.id() !== Group.GUEST_ID);
+    const groups = sortGroups(app.store.all<Group>('groups').filter((group) => group.id() !== Group.GUEST_ID));
 
     return (
       <div className="Form-group EditTourModal-audience">
         <label>{app.translator.trans('datlechin-simple-tour-guide.admin.tour_modal.audience_label')}</label>
+        <MultiSelect
+          value={this.groupIds()}
+          disabled={this.loading}
+          options={Object.fromEntries(groups.map((group) => [group.id()!, group.namePlural()]))}
+          onchange={this.groupIds}
+        />
         <div className="helpText">{app.translator.trans('datlechin-simple-tour-guide.admin.tour_modal.audience_help')}</div>
-
-        <div className="EditTourModal-groups">
-          {groups.map((group) => (
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                disabled={this.loading}
-                checked={this.groupIds().includes(group.id()!)}
-                onchange={() => this.toggleGroup(group.id()!)}
-              />
-              {group.namePlural()}
-            </label>
-          ))}
-        </div>
 
         <label className="EditTourModal-age">
           {app.translator.trans('datlechin-simple-tour-guide.admin.tour_modal.max_age_label')}
-          <input className="FormControl" type="number" min="1" max="3650" disabled={this.loading} bidi={this.maxAccountAgeDays} />
+          <input
+            className="FormControl"
+            name="maxAccountAgeDays"
+            type="number"
+            min="1"
+            max="3650"
+            disabled={this.loading}
+            bidi={this.maxAccountAgeDays}
+          />
         </label>
         <div className="helpText">{app.translator.trans('datlechin-simple-tour-guide.admin.tour_modal.max_age_help')}</div>
       </div>
     );
-  }
-
-  protected toggleGroup(id: string): void {
-    const current = this.groupIds();
-
-    this.groupIds(current.includes(id) ? current.filter((other: string) => other !== id) : [...current, id]);
   }
 
   onsubmit(e: SubmitEvent) {
@@ -217,26 +211,31 @@ export default class EditTourModal<CustomAttrs extends EditTourModalAttrs = Edit
     const age = parseInt(this.maxAccountAgeDays(), 10);
 
     this.tour
-      .save({
-        key: this.key().trim() || undefined,
-        title: this.tourTitle(),
-        isEnabled: this.isEnabled(),
-        startMode: this.startMode(),
-        route: this.route().trim() || null,
-        devices: this.devices(),
-        groupIds: this.groupIds().map(Number),
-        maxAccountAgeDays: Number.isFinite(age) && age > 0 ? age : null,
-      })
-      .then(() => this.hide(), this.loaded.bind(this));
+      .save(
+        {
+          key: this.key().trim() || undefined,
+          title: this.tourTitle(),
+          isEnabled: this.isEnabled(),
+          startMode: this.startMode(),
+          route: this.route().trim() || null,
+          devices: this.devices(),
+          maxAccountAgeDays: age > 0 ? age : null,
+          relationships: { groups: this.groupIds().map((id: string) => app.store.getById<Group>('groups', id)!) },
+        },
+        { errorHandler: this.onerror.bind(this) }
+      )
+      .then(this.hide.bind(this))
+      .catch(() => {
+        this.loading = false;
+        m.redraw();
+      });
   }
 
   deleteTour() {
-    const confirmation = extractText(app.translator.trans('datlechin-simple-tour-guide.admin.tour_modal.delete_confirmation'));
-
-    if (!confirm(confirmation)) return;
+    if (!confirm(extractText(app.translator.trans('datlechin-simple-tour-guide.admin.tour_modal.delete_confirmation')))) return;
 
     this.loading = true;
 
-    this.tour.delete().then(() => this.hide(), this.loaded.bind(this));
+    this.tour.delete().then(this.hide.bind(this), this.loaded.bind(this));
   }
 }

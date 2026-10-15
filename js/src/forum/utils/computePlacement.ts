@@ -12,30 +12,19 @@ export interface Box extends Size {
 
 export interface Placement {
   side: TourSide;
-  /** Viewport coordinates, so the maths is the same whichever way the page reads. */
   top: number;
   left: number;
-  /**
-   * Where the arrow sits along the popover's edge, in pixels from the popover's
-   * top-left corner. Meaningless when `side` is `center`, which has no arrow.
-   */
+  // Along the popover's edge, from its top-left corner.
   arrowOffset: number;
 }
 
-/** Space between the highlighted element and the popover. */
 const GAP = 14;
 
-/** How close to the edge of the screen the popover may come. */
 const MARGIN = 12;
 
-/** How close to a corner the arrow may come. */
 const ARROW_INSET = 22;
 
-/**
- * Which sides to try, and in what order, for each preferred side. The opposite
- * side comes second because flipping keeps the popover on the same axis as the
- * element it describes, which is the smaller change for the reader to follow.
- */
+// The opposite side comes second: flipping keeps the popover on the same axis as its element.
 const FALLBACKS: Record<Exclude<TourSide, 'center'>, Exclude<TourSide, 'center'>[]> = {
   bottom: ['bottom', 'top', 'right', 'left'],
   top: ['top', 'bottom', 'right', 'left'],
@@ -43,14 +32,7 @@ const FALLBACKS: Record<Exclude<TourSide, 'center'>, Exclude<TourSide, 'center'>
   left: ['left', 'right', 'bottom', 'top'],
 };
 
-/**
- * Decide where a step's popover goes.
- *
- * Tries the preferred side and then its fallbacks, taking the first that fits
- * on screen whole. When the element is large enough that no side has room, the
- * popover goes to the middle of the screen: overlapping what it describes is
- * better than hanging off the edge where it cannot be read.
- */
+// When no side has room the popover goes to the middle: overlapping its element beats hanging off the screen.
 export default function computePlacement(
   target: Box | null,
   popover: Size,
@@ -114,7 +96,6 @@ function arrowAlong(offset: number, extent: number): number {
 }
 
 function clamp(value: number, min: number, max: number): number {
-  // A popover wider than the space it has to sit in would give `max < min`;
-  // pinning it to the near edge at least keeps its start on screen.
+  // A popover wider than its space gives max < min; pin it to the near edge.
   return Math.max(min, Math.min(value, Math.max(min, max)));
 }

@@ -13,139 +13,98 @@ namespace Datlechin\FlarumSimpleTourGuide\Api;
 
 use Datlechin\FlarumSimpleTourGuide\Tour;
 use Datlechin\FlarumSimpleTourGuide\TourStep;
-use Datlechin\FlarumSimpleTourGuide\TourStepTranslation;
+use Flarum\User\User;
+use Illuminate\Contracts\Validation\Factory;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
-use InvalidArgumentException;
 
-/**
- * Reads and writes a tour as a plain document, so one can be moved from a
- * staging forum to a live one without retyping it.
- *
- * What travels is the tour as written: no ids, and no record of who has been
- * through it, because neither means anything on the other forum.
- */
 class TourTransfer
 {
     public const VERSION = 1;
 
     public function __construct(
         protected ConnectionInterface $connection,
+        protected Factory $validator,
     ) {
     }
 
+    /**
+     * @return array<string, mixed>
+     */
     public function export(Tour $tour): array
     {
-        $tour->loadMissing(['steps.translations']);
-
-        $steps = $tour->steps
-            ->sortBy([['position', 'asc'], ['id', 'asc']])
-            ->map(fn (TourStep $step) => [
-                'title' => $step->title,
-                'description' => $step->description,
-                'target' => $step->target,
-                'placement' => $step->placement,
-                'devices' => $step->devices,
-                'isEnabled' => $step->is_enabled,
-                'clicksTarget' => $step->clicks_target,
-                'advanceOnClick' => $step->advance_on_click,
-                'translations' => $step->translations
-                    ->sortBy('locale')
-                    ->mapWithKeys(fn (TourStepTranslation $t) => [
-                        $t->locale => ['title' => $t->title, 'description' => $t->description],
-                    ])
-                    ->all(),
-            ])
-            ->values()
-            ->all();
+        $tour->loadMissing('steps.translations');
 
         return [
             'version' => self::VERSION,
             'tour' => [
                 'key' => $tour->key,
                 'title' => $tour->title,
-                'isEnabled' => $tour->is_enabled,
                 'startMode' => $tour->start_mode,
                 'route' => $tour->route,
                 'devices' => $tour->devices,
-                'groupIds' => $tour->group_ids,
                 'maxAccountAgeDays' => $tour->max_account_age_days,
             ],
-            'steps' => $steps,
+            'steps' => $tour->steps->map(fn (TourStep $step) => [
+                'title' => $step->title,
+                'description' => $step->content,
+                'target' => $step->target,
+                'placement' => $step->placement,
+                'devices' => $step->devices,
+                'isEnabled' => $step->is_enabled,
+                'clicksTarget' => $step->clicks_target,
+                'advanceOnClick' => $step->advance_on_click,
+                'translations' => $step->translationMap(),
+            ])->all(),
         ];
     }
 
     /**
-     * @throws InvalidArgumentException when the document is not one of ours.
+     * @param array<string, mixed> $document
      */
-    public function import(array $document): Tour
+    public function import(array $document, User $actor): Tour
     {
-        if (Arr::get($document, 'version') !== self::VERSION) {
-            throw new InvalidArgumentException('Unsupported tour document version.');
-        }
+        $this->validator->make($document, [
+            'version' => ['required', 'in:'.self::VERSION],
+            'tour' => ['required', 'array'],
+            'steps' => ['present', 'array'],
+            'steps.*' => ['array'],
+        ])->validate();
 
-        $attributes = Arr::get($document, 'tour');
-        $steps = Arr::get($document, 'steps');
+        return $this->connection->transaction(function () use ($document, $actor) {
+            $attributes = $document['tour'];
 
-        if (! is_array($attributes) || ! is_array($steps)) {
-            throw new InvalidArgumentException('A tour document needs a tour and its steps.');
-        }
-
-        return $this->connection->transaction(function () use ($attributes, $steps) {
             $tour = new Tour();
-            $tour->key = $this->availableKey(Arr::get($attributes, 'key', 'imported-tour'));
+            $tour->key = $this->availableKey((string) Arr::get($attributes, 'key', 'imported-tour'));
             $tour->title = (string) Arr::get($attributes, 'title', $tour->key);
-
-            // Off on arrival, whatever it was on the forum it came from: an
-            // import lands unreviewed, and a tour nobody has looked at should
-            // not start showing itself to members.
+            // An import lands unreviewed, and its groups belong to the forum it came from.
             $tour->is_enabled = false;
-
             $tour->start_mode = $this->oneOf(Arr::get($attributes, 'startMode'), Tour::startModes(), Tour::START_AUTO);
             $tour->route = Arr::get($attributes, 'route') ?: null;
             $tour->devices = $this->oneOf(Arr::get($attributes, 'devices'), Tour::deviceOptions(), Tour::DEVICES_ANY);
-
-            // Group ids name groups on the forum it came from, which are not
-            // the groups here, so the audience is left open for the admin to
-            // set again rather than guessed at.
-            $tour->group_ids = null;
-
-            $maxAge = Arr::get($attributes, 'maxAccountAgeDays');
-            $tour->max_account_age_days = is_numeric($maxAge) ? (int) $maxAge : null;
-
-            $tour->position = ((int) Tour::query()->max('position')) + 1;
+            $tour->max_account_age_days = is_numeric($maxAge = Arr::get($attributes, 'maxAccountAgeDays')) ? (int) $maxAge : null;
+            $tour->position = Tour::nextPosition(Tour::query());
             $tour->save();
 
-            foreach (array_values($steps) as $position => $step) {
-                if (! is_array($step)) {
-                    continue;
-                }
+            foreach (array_values($document['steps']) as $position => $data) {
+                $step = new TourStep();
+                $step->tour_id = $tour->id;
+                $step->title = (string) Arr::get($data, 'title', '');
+                $step->setContentAttribute((string) Arr::get($data, 'description', ''), $actor);
+                $step->target = Arr::get($data, 'target') ?: null;
+                $step->placement = $this->oneOf(Arr::get($data, 'placement'), TourStep::placements(), TourStep::PLACEMENT_AUTO);
+                $step->devices = $this->oneOf(Arr::get($data, 'devices'), Tour::deviceOptions(), Tour::DEVICES_ANY);
+                $step->is_enabled = (bool) Arr::get($data, 'isEnabled', true);
+                $step->clicks_target = (bool) Arr::get($data, 'clicksTarget', false);
+                $step->advance_on_click = (bool) Arr::get($data, 'advanceOnClick', false);
+                $step->position = $position;
+                $step->save();
 
-                $model = new TourStep();
-                $model->tour_id = $tour->id;
-                $model->title = (string) Arr::get($step, 'title', '');
-                $model->description = (string) Arr::get($step, 'description', '');
-                $model->target = Arr::get($step, 'target') ?: null;
-                $model->placement = $this->oneOf(Arr::get($step, 'placement'), TourStep::placements(), TourStep::PLACEMENT_AUTO);
-                $model->devices = $this->oneOf(Arr::get($step, 'devices'), Tour::deviceOptions(), Tour::DEVICES_ANY);
-                $model->is_enabled = (bool) Arr::get($step, 'isEnabled', true);
-                $model->clicks_target = (bool) Arr::get($step, 'clicksTarget', false);
-                $model->advance_on_click = (bool) Arr::get($step, 'advanceOnClick', false);
-                $model->position = $position;
-                $model->save();
-
-                foreach ((array) Arr::get($step, 'translations', []) as $locale => $content) {
-                    if (! is_string($locale) || ! is_array($content)) {
-                        continue;
+                foreach ((array) Arr::get($data, 'translations', []) as $locale => $content) {
+                    if (is_string($locale) && is_array($content)) {
+                        $step->saveTranslation(Str::limit($locale, 20, ''), (string) Arr::get($content, 'title', ''), (string) Arr::get($content, 'description', ''), $actor);
                     }
-
-                    $translation = new TourStepTranslation();
-                    $translation->step_id = $model->id;
-                    $translation->locale = Str::limit($locale, 20, '');
-                    $translation->title = (string) Arr::get($content, 'title', '');
-                    $translation->description = (string) Arr::get($content, 'description', '');
-                    $translation->save();
                 }
             }
 
@@ -153,10 +112,6 @@ class TourTransfer
         });
     }
 
-    /**
-     * Keys are unique, and an import should never overwrite the tour already
-     * living under that name.
-     */
     protected function availableKey(string $wanted): string
     {
         $base = Str::limit(Str::slug($wanted) ?: 'imported-tour', 90, '');

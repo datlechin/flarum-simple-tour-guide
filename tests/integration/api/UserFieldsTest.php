@@ -13,41 +13,24 @@ namespace Datlechin\FlarumSimpleTourGuide\Tests\integration\api;
 
 use PHPUnit\Framework\Attributes\Test;
 
-/**
- * What a member's own record says about their tours, and who gets to see it.
- */
 class UserFieldsTest extends TourGuideTestCase
 {
     #[Test]
-    public function member_sees_their_own_count_and_may_reset_it(): void
+    public function member_may_reset_their_own_tours(): void
     {
-        $this->send($this->request('POST', '/api/tour-guide/completions', [
-            'authenticatedAs' => self::MEMBER,
-            'json' => ['tourKey' => 'welcome', 'outcome' => 'finished'],
-        ]));
-
-        $attributes = $this->userAttributes(self::MEMBER, self::MEMBER);
-
-        $this->assertEquals(1, $attributes['tourGuideCompletionCount']);
-        $this->assertTrue($attributes['canResetTourGuide']);
+        $this->assertTrue($this->userAttributes(self::MEMBER, self::MEMBER)['canResetTourGuide']);
     }
 
     #[Test]
-    public function a_member_learns_nothing_about_somebody_else(): void
+    public function member_may_not_reset_somebody_else(): void
     {
-        $attributes = $this->userAttributes(self::ADMIN, self::MEMBER);
-
-        $this->assertArrayNotHasKey('tourGuideCompletionCount', $attributes);
-        $this->assertFalse($attributes['canResetTourGuide']);
+        $this->assertFalse($this->userAttributes(self::ADMIN, self::MEMBER)['canResetTourGuide']);
     }
 
     #[Test]
     public function a_moderator_with_the_permission_may_reset_anybody(): void
     {
-        $attributes = $this->userAttributes(self::MEMBER, self::ADMIN);
-
-        $this->assertTrue($attributes['canResetTourGuide']);
-        $this->assertArrayHasKey('tourGuideCompletionCount', $attributes);
+        $this->assertTrue($this->userAttributes(self::MEMBER, self::ADMIN)['canResetTourGuide']);
     }
 
     /**

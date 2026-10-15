@@ -1,11 +1,10 @@
 import Model from 'flarum/common/Model';
+import type Group from 'flarum/common/models/Group';
 
+import type TourCompletion from './TourCompletion';
 import type TourStep from './TourStep';
+import type { Devices, StartMode } from '../types';
 
-/**
- * A tour, as the admin area edits it. The forum reads a narrower payload of
- * its own; see `forum/loadTours`.
- */
 export default class Tour extends Model {
   key() {
     return Model.attribute<string>('key').call(this);
@@ -19,23 +18,16 @@ export default class Tour extends Model {
     return Model.attribute<boolean>('isEnabled').call(this);
   }
 
-  /** 'auto' starts itself, 'manual' waits to be launched by the member. */
   startMode() {
-    return Model.attribute<'auto' | 'manual'>('startMode').call(this);
+    return Model.attribute<StartMode>('startMode').call(this);
   }
 
-  /** A Flarum route name, or null to run wherever the member is. */
   route() {
     return Model.attribute<string | null>('route').call(this);
   }
 
   devices() {
-    return Model.attribute<'any' | 'desktop' | 'mobile'>('devices').call(this);
-  }
-
-  /** Group ids that may see it. Null or empty means everybody. */
-  groupIds() {
-    return Model.attribute<number[] | null>('groupIds').call(this);
+    return Model.attribute<Devices>('devices').call(this);
   }
 
   maxAccountAgeDays() {
@@ -46,11 +38,23 @@ export default class Tour extends Model {
     return Model.attribute<number>('position').call(this);
   }
 
-  stepCount() {
-    return Model.attribute<number>('stepCount').call(this);
+  groups() {
+    return Model.hasMany<Group>('groups').call(this);
   }
 
-  steps() {
-    return Model.hasMany<TourStep>('steps').call(this);
+  // From the store rather than the relationship, which misses steps added after the tour loaded.
+  steps(): TourStep[] {
+    return this.store
+      .all<TourStep>('tour-guide-steps')
+      .filter((step) => step.tour() === this)
+      .sort((a, b) => a.position() - b.position());
+  }
+
+  enabledSteps() {
+    return Model.hasMany<TourStep>('enabledSteps').call(this);
+  }
+
+  completion() {
+    return Model.hasOne<TourCompletion>('completion').call(this);
   }
 }

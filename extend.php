@@ -11,23 +11,21 @@
 
 namespace Datlechin\FlarumSimpleTourGuide;
 
+use Datlechin\FlarumSimpleTourGuide\Access\ScopeTourVisibility;
 use Datlechin\FlarumSimpleTourGuide\Access\UserPolicy;
-use Datlechin\FlarumSimpleTourGuide\Api\Controller\DuplicateTourController;
-use Datlechin\FlarumSimpleTourGuide\Api\Controller\DuplicateTourStepController;
-use Datlechin\FlarumSimpleTourGuide\Api\Controller\ExportTourController;
-use Datlechin\FlarumSimpleTourGuide\Api\Controller\ImportTourController;
-use Datlechin\FlarumSimpleTourGuide\Api\Controller\OrderToursController;
-use Datlechin\FlarumSimpleTourGuide\Api\Controller\OrderTourStepsController;
-use Datlechin\FlarumSimpleTourGuide\Api\Controller\RecordTourCompletionController;
-use Datlechin\FlarumSimpleTourGuide\Api\Controller\ResetTourCompletionsController;
-use Datlechin\FlarumSimpleTourGuide\Api\Controller\ShowAvailableToursController;
-use Datlechin\FlarumSimpleTourGuide\Api\Controller\ShowTourStatsController;
+use Datlechin\FlarumSimpleTourGuide\Api\Resource\TourCompletionResource;
 use Datlechin\FlarumSimpleTourGuide\Api\Resource\TourResource;
 use Datlechin\FlarumSimpleTourGuide\Api\Resource\TourStepResource;
-use Datlechin\FlarumSimpleTourGuide\Api\UserResourceFields;
+use Datlechin\FlarumSimpleTourGuide\Search\Filter\AvailableFilter;
+use Datlechin\FlarumSimpleTourGuide\Search\TourSearcher;
+use Flarum\Api\Context;
+use Flarum\Api\Endpoint;
 use Flarum\Api\Resource\UserResource;
+use Flarum\Api\Schema;
 use Flarum\Extend;
+use Flarum\Search\Database\DatabaseSearchDriver;
 use Flarum\User\User;
+use Laminas\Diactoros\Response\EmptyResponse;
 
 return [
     (new Extend\Frontend('forum'))
@@ -40,32 +38,45 @@ return [
 
     new Extend\Locales(__DIR__.'/locale'),
 
+    (new Extend\ServiceProvider())
+        ->register(TourGuideServiceProvider::class),
+
     new Extend\ApiResource(TourResource::class),
     new Extend\ApiResource(TourStepResource::class),
+    new Extend\ApiResource(TourCompletionResource::class),
 
     (new Extend\ApiResource(UserResource::class))
-        ->fields(UserResourceFields::class),
+        ->fields(fn () => [
+            Schema\Boolean::make('canResetTourGuide')
+                ->get(fn (User $user, Context $context) => $context->getActor()->can('resetTourGuide', $user)),
+        ])
+        ->endpoints(fn () => [
+            Endpoint\Endpoint::make('tourGuideCompletions.delete')
+                ->route('DELETE', '/{id}/tour-guide-completions')
+                ->can('resetTourGuide')
+                ->action(fn (Context $context) => TourCompletion::query()->where('user_id', $context->model->id)->delete())
+                ->response(fn () => new EmptyResponse(204)),
+        ]),
 
-    (new Extend\Routes('api'))
-        // What the forum runs: only this member's tours, only in their
-        // language. Deliberately not the admin resource, which would have to
-        // hand out audience rules and every translation to answer the same
-        // question.
-        ->get('/tour-guide/available', 'tour-guide.available', ShowAvailableToursController::class)
-        ->post('/tour-guide/completions', 'tour-guide.completions.record', RecordTourCompletionController::class)
-        ->post('/tour-guide/completions/reset', 'tour-guide.completions.reset', ResetTourCompletionsController::class)
+    // Flarum models ignore Eloquent's $attributes, so a new row only reports these defaults through here.
+    (new Extend\Model(Tour::class))
+        ->default('is_enabled', true)
+        ->default('start_mode', Tour::START_AUTO)
+        ->default('devices', Tour::DEVICES_ANY),
 
-        // Ordering is one decision about a whole list, not an edit to each row
-        // in it, so it is one request rather than one per moved row.
-        ->post('/tour-guide-tours/order', 'tour-guide-tours.order', OrderToursController::class)
-        ->post('/tour-guide-tours/{id}/steps/order', 'tour-guide-tours.steps.order', OrderTourStepsController::class)
+    (new Extend\Model(TourStep::class))
+        ->default('placement', TourStep::PLACEMENT_AUTO)
+        ->default('devices', Tour::DEVICES_ANY)
+        ->default('is_enabled', true)
+        ->default('clicks_target', false)
+        ->default('advance_on_click', false),
 
-        ->post('/tour-guide-tours/{id}/duplicate', 'tour-guide-tours.duplicate', DuplicateTourController::class)
-        ->post('/tour-guide-steps/{id}/duplicate', 'tour-guide-steps.duplicate', DuplicateTourStepController::class)
+    (new Extend\ModelVisibility(Tour::class))
+        ->scope(ScopeTourVisibility::class),
 
-        ->get('/tour-guide-tours/{id}/stats', 'tour-guide-tours.stats', ShowTourStatsController::class)
-        ->get('/tour-guide-tours/{id}/export', 'tour-guide-tours.export', ExportTourController::class)
-        ->post('/tour-guide-tours/import', 'tour-guide-tours.import', ImportTourController::class),
+    (new Extend\SearchDriver(DatabaseSearchDriver::class))
+        ->addSearcher(Tour::class, TourSearcher::class)
+        ->addFilter(TourSearcher::class, AvailableFilter::class),
 
     (new Extend\Policy())
         ->modelPolicy(User::class, UserPolicy::class),
